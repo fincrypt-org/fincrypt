@@ -1,51 +1,24 @@
 # Fincrypt
 
-**End-to-end encrypted personal finance. The operator cannot read your data.**
+Fincrypt is an open-source financial management platform where all data is encrypted end-to-end. Your transactions, accounts, budgets, and documents are encrypted on your device before they leave it — the server stores unreadable ciphertext and holds no keys. No plaintext financial data is ever leaked, to us or to anyone else.
 
-Fincrypt is a web-first personal finance platform where every record —
-transactions, accounts, budgets, notes, documents, chat — is encrypted on
-your device before it leaves it. The server is a dumb ciphertext store:
-it can route and store your encrypted rows, but it has no key and no way
-to read them. Your passphrase proves who you are without ever being sent
-(OPAQUE), and your encryption keys are derived from it on your device.
+Because it's open source, you can run it yourself and connect it to any open-source model for AI features like smart document scanning and category suggestions. The AI only ever sees what your own setup sends it, on your own terms — or nothing at all, since the core platform works fully without it.
 
-## What the operator cannot see
+## What it does
 
-- Transaction descriptions, amounts (beyond date-range structure),
-  merchants, notes
-- Account names, balances, institutions
-- Budgets, categories, reports
-- Documents you attach (receipts, statements) — encrypted before upload
-- AI chat history — encrypted on-device
-- Your passphrase — never transmitted, never stored
+- **Track accounts and transactions** — manual entry always works, offline included
+- **Smart document scan** — a receipt, invoice, or multi-page bank statement becomes transaction drafts you review and confirm (bring your own open-source vision model, or use the labeled on-device fallback)
+- **CSV import** — processed entirely on your device, never uploaded
+- **Multi-device sync** — encrypted data syncs across devices; conflicts and deletes are handled automatically
+- **Budgets and reports** — category totals, cash flow, charts, all computed on your device from decrypted data
 
-The operator *can* see: account email, coarse metadata (row counts,
-timestamps), and the deterministic transaction dates used for sorting.
-That is the whole list.
+## How it works
 
-## How it works, in one paragraph
+The technology is simple: end-to-end encryption.
 
-Two derivations of one passphrase: authentication (OPAQUE — the server
-verifies without learning the password) and encryption (Argon2id → KEK →
-unwraps a random 32-byte data key). Every row is encrypted with
-AES-256-GCM with per-record AAD binding, per-purpose subkeys derived via
-HKDF, and tombstone deletes for multi-device sync. Optional smart scan
-sends document images only to your declared AI zone (your own endpoint,
-or an attested enclave on the hosted tier) — never to the operator, never
-to third parties. CSV import and manual entry never leave your device.
-
-## Honest limits (the threat model, compressed)
-
-- **Database compromise still enables offline passphrase cracking.**
-  This is inherent to password-based E2EE. We say it plainly rather than
-  paper over it: use a strong passphrase. See
-  [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for the full model,
-  including what a malicious server can and cannot do.
-- **Lost passphrase + lost recovery phrase = permanent loss.** By
-  design. Onboarding makes the phrase unmissable.
-- Bank-feed sync (Plaid) is a minimal, session-scoped slice in v1 and
-  intentionally exposes plaintext to Plaid during that sync window —
-  disclosed, not hidden.
+- Your passphrase derives your encryption keys on your device — it is never sent to the server. Login uses OPAQUE, so authentication proves your identity without revealing the password.
+- Every record is encrypted with AES-256-GCM before it reaches the server, bound to your user and record type so nothing can be shuffled or swapped.
+- The server is a dumb ciphertext store. A database leak gives an attacker unreadable blobs — nothing else.
 
 ## Quickstart
 
@@ -62,19 +35,20 @@ make web-dev             # Vite dev server
 make ci                  # all gates CI runs
 ```
 
-## Backups are safe by accident
+## Self-hosting
 
-Because every stored row is ciphertext, Postgres backups can be taken
-naively — a leaked backup is indistinguishable from the live database:
-unreadable without user passphrases.
+You run the stack, you hold the keys, nothing leaves your machine. Docker Compose brings up the app and Postgres; point the AI features at any open-source model endpoint (Ollama, llama.cpp, anything OpenAI-compatible) and document images and AI queries go there and nowhere else. Full guide coming with the beta.
+
+## Honest limits
+
+- A database leak still lets an attacker try to crack your passphrase offline. A strong passphrase is the real defense — this is inherent to password-based encryption and we won't pretend otherwise.
+- Lose your passphrase and your recovery phrase, and your data is gone. That's by design.
+- The hosted version exists for convenience, but the codebase is the same: self-host and you're the operator.
 
 ## License
 
-AGPL-3.0 — see [LICENSE](LICENSE). The optional AI model weights are
-Apache-2.0 and distributed separately; nothing here depends on
-license-contaminated weights.
+AGPL-3.0 — see [LICENSE](LICENSE). Optional AI model weights are Apache-2.0 and distributed separately.
 
 ## Status
 
-Pre-beta. The crypto design is specified in docs/THREAT_MODEL.md and the
-code follows it; an external security review gates the beta launch.
+Pre-beta. An external security review gates the launch. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for the full security model.
