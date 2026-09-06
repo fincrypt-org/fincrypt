@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: fincrypt
+      POSTGRES_PASSWORD: fincrypt
+      POSTGRES_DB: fincrypt
+    ports:
+      - "5432:5432"
+    volumes:
+      - fincrypt_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fincrypt -d fincrypt"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    environment:
+      ENV: prod
+      PORT: "8080"
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://fincrypt:fincrypt@postgres:5432/fincrypt?sslmode=disable
+      # dev key placeholder for compose smoke only; prod injects real secrets
+      SESSION_KEYS: ${SESSION_KEYS:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  fincrypt_pgdata:

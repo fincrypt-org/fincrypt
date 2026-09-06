@@ -1,0 +1,40 @@
+# Planning material stays local — never published
+.planning/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage/
+bin/
+vendor/
+
+# Node / web
+node_modules/
+web/dist/
+web/coverage/
+web/playwright-report/
+web/test-results/
+web/.playwright/
+
+# Logs & OS junk
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Local docker scratch
+.pgdata/
