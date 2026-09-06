@@ -9,8 +9,9 @@ These are enforced mechanically where possible and by review everywhere
 else. Violations void the E2EE claim and will be reverted.
 
 1. **Migrations are append-only.** Never edit an applied migration file.
-   The runner checksum-verifies every applied file against the
-   `schema_migrations` ledger; editing `001_initial_schema.sql` after it
+   The runner creates the `schema_migrations` ledger itself (before first
+   apply — 001 contains app tables only) and checksum-verifies every
+   applied file against it; editing `001_initial_schema.sql` after it
    has been applied makes the server refuse to boot. All changes are new
    files (`002_*.sql`, `003_*.sql`, …).
 
