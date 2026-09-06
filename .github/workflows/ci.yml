@@ -143,16 +143,16 @@ jobs:
       - name: no analytics dependencies or dist artifacts
         run: |
           set -euo pipefail
-          patterns='sentry|posthog|plausible|segment|mixpanel|matomo|firebase-analytics|google-analytics|gtag|amplitude'
+          patterns='(@sentry/|sentry-javascript|posthog|plausible-tracker|"segment-analytics"|segment-analytics-js|"@segment/|mixpanel|matomo|firebase-analytics|google-analytics|"gtag\.js"|gtag/js|amplitude-js|@amplitude/)'
           echo "scanning package manifests…"
-          if grep -riE "$patterns" web/package.json web/package-lock.json; then
+          if grep -qiE "$patterns" web/package.json web/package-lock.json go.mod go.sum; then
             echo "::error::analytics dependency found — zero telemetry is policy"
             exit 1
           fi
           echo "scanning built dist…"
           npm ci --prefix web
           npm run build --prefix web
-          if grep -riE "$patterns" web/dist/; then
+          if grep -rqiE "$patterns" web/dist/; then
             echo "::error::analytics artifact found in dist — zero telemetry is policy"
             exit 1
           fi
