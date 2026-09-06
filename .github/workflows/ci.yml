@@ -15,7 +15,7 @@ jobs:
   lint-go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
@@ -45,7 +45,7 @@ jobs:
     env:
       DATABASE_URL: postgres://fincrypt:fincrypt@localhost:5432/fincrypt?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
@@ -59,7 +59,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -75,7 +75,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -87,7 +87,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
@@ -106,7 +106,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: validate compose config
         run: docker compose config -q
       - name: build and boot
@@ -130,7 +130,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks (full history)
@@ -143,7 +143,7 @@ jobs:
   no-telemetry:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: no analytics dependencies or dist artifacts
         run: |
           set -euo pipefail
@@ -185,7 +185,7 @@ jobs:
       PGPASSWORD: fincrypt
       CANARY_MARKER: no-plaintext-canary-marker-6f3a
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: boot server (applies 001)
         run: docker compose up -d --build
       - name: seed canary marker into the DB
