@@ -5,8 +5,12 @@ services:
       POSTGRES_USER: fincrypt
       POSTGRES_PASSWORD: fincrypt
       POSTGRES_DB: fincrypt
-    ports:
-      - "5432:5432"
+    # No host port mapping: CI runs both the postgres service container
+    # (host 5432 for go tests) and `compose up` in the same job — a
+    # published port would collide. The app reaches postgres over the
+    # internal compose network.
+    expose:
+      - "5432"
     volumes:
       - fincrypt_pgdata:/var/lib/postgresql/data
     healthcheck:
