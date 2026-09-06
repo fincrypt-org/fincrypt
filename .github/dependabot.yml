@@ -8,6 +8,11 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    # Majors are evaluated deliberately (batched, with test-suite runs),
+    # not auto-proposed during active development phases.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
