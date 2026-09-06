@@ -34,19 +34,17 @@ session-scoped, disclosed.
 | **DB leak (dump/backups)** | Full ciphertext dump | Same as above | Offline passphrase cracking against `kdf_salt` is possible — see residual below |
 | **Enclave host (hosted AI tier, P5)** | Host OS on the enclave machine | Encrypted inference traffic only | Nitro attestation with pinned PCRs; tampered PCR must refuse key release (tested) |
 | **XSS on the web app** | Script in page context | Everything in Zone 1 while the tab is open | CSP (no inline scripts in prod builds), no third-party scripts ever, keys live in memory only (never localStorage) |
-| **Malicious/compromised server (rewind/omit)** | Serve stale or missing rows, rollback deletes | Confusion, not plaintext | Client-tracked row versions detect rewind/omit; **not fully prevented** — a server can still withhold data. Documented limitation, not hidden |
+| **Malicious/compromised server (rewind/omit)** | Serve stale or missing rows, rollback deletes | Confusion, not plaintext | Client-tracked row versions detect rewind/omit; not fully prevented — a server can still withhold data (known limitation) |
 | **Passphrase/phishing** | Trick user | Everything the passphrase protects | Onboarding shows recovery phrase once with unrecoverability warning; support never asks for passphrase or phrase |
 
 ## Honest residual
 
 **A database compromise enables offline passphrase cracking, which means
 full data loss.** Password-based E2EE derives keys from the passphrase;
-`kdf_salt` and `kdf_params` are stored server-side by necessity. We
-choose Argon2id (64 MiB, t=3, p=4 — tunable upward per-user via
-`kdf_params`) to make each guess expensive, but a weak passphrase is a
-real risk and no server-side measure fixes it. This is the known cost of
-the "operator can't read your data" model. It is stated, not papered
-over.
+`kdf_salt` and `kdf_params` are stored server-side by necessity.
+Argon2id (64 MiB, t=3, p=4 — tunable upward per-user via `kdf_params`)
+makes each guess expensive, but a weak passphrase remains a real risk
+and no server-side measure fixes it.
 
 Other residuals: metadata (row counts, timing) leaks by design;
 deterministic `tx_date` is stored in the clear for range queries; a
