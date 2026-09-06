@@ -111,11 +111,11 @@ func TestMigrateDetectsPostApplyEdit(t *testing.T) {
 	dir := t.TempDir()
 
 	// Copy real migrations into a temp dir we may mutate.
-	real, err := os.ReadDir(filepath.Join("..", "..", "db", "migrations"))
+	existing, err := os.ReadDir(filepath.Join("..", "..", "db", "migrations"))
 	if err != nil {
 		t.Fatalf("read migrations: %v", err)
 	}
-	for _, e := range real {
+	for _, e := range existing {
 		data, err := os.ReadFile(filepath.Join("..", "..", "db", "migrations", e.Name()))
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)

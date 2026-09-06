@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 )
 
 // RequestID assigns a UUID to every request and echoes it as X-Request-ID.
@@ -112,9 +111,3 @@ func (r *statusRecorder) WriteHeader(code int) {
 // WriteHeaderString exists to satisfy any interface assertions on wrappers
 // that need to know whether headers were sent.
 func (r *statusRecorder) Written() bool { return r.written }
-
-// trimOrigin strips credentials from a URL-like string (defensive helper
-// for future CORS config parsing).
-func trimOrigin(s string) string {
-	return strings.TrimSpace(s)
-}

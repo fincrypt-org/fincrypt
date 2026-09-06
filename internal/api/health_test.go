@@ -31,12 +31,12 @@ func newTestServer(t *testing.T, cfg config.Config) *Server {
 // failingPinger is a Pinger that always fails.
 type failingPinger struct{}
 
-func (failingPinger) Ping(ctx context.Context) error { return errors.New("db down") }
+func (failingPinger) Ping(_ context.Context) error { return errors.New("db down") }
 
 func TestHealthzAlways200(t *testing.T) {
 	s := newTestServer(t, testConfig())
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	s.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -52,7 +52,7 @@ func TestReadyz(t *testing.T) {
 
 	// With a zero pool, Ping must fail -> 503.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
 	s.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("/readyz with dead pool: status = %d, want 503", rec.Code)
@@ -63,11 +63,11 @@ func TestPanicBecomes500JSON(t *testing.T) {
 	s := newTestServer(t, testConfig())
 
 	// Wrap a panicking handler through the full chain.
-	h := s.recoverMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := s.recoverMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		panic("boom")
 	}))
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/boom", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/boom", nil)
 	h.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
@@ -88,7 +88,7 @@ func TestLogsContainNoBodyOrCookie(t *testing.T) {
 
 	sensitiveBody := `{"password":"super-secret-plaintext","cookie":"session=abc123"}`
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/healthz", strings.NewReader(sensitiveBody))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/healthz", strings.NewReader(sensitiveBody))
 	req.Header.Set("Cookie", "session=abc123; other=xyz")
 	s.ServeHTTP(rec, req)
 
@@ -105,7 +105,7 @@ func TestLogsContainNoBodyOrCookie(t *testing.T) {
 func TestRequestIDEchoed(t *testing.T) {
 	s := newTestServer(t, testConfig())
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	s.ServeHTTP(rec, req)
 
 	if got := rec.Header().Get("X-Request-ID"); got == "" {
@@ -113,7 +113,7 @@ func TestRequestIDEchoed(t *testing.T) {
 	}
 
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	req2.Header.Set("X-Request-ID", "fixed-id-123")
 	s.ServeHTTP(rec2, req2)
 	if got := rec2.Header().Get("X-Request-ID"); got != "fixed-id-123" {
@@ -124,7 +124,7 @@ func TestRequestIDEchoed(t *testing.T) {
 func TestSecureHeadersPresent(t *testing.T) {
 	s := newTestServer(t, testConfig())
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	s.ServeHTTP(rec, req)
 
 	for _, h := range []string{"X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Content-Security-Policy"} {
@@ -143,7 +143,7 @@ func TestCORSDevOnly(t *testing.T) {
 	s := newTestServer(t, cfg)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	s.ServeHTTP(rec, req)
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
@@ -155,7 +155,7 @@ func TestCORSDevOnly(t *testing.T) {
 
 	// Same server, different origin -> no CORS headers.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	req2.Header.Set("Origin", "https://evil.example")
 	s.ServeHTTP(rec2, req2)
 	if got := rec2.Header().Get("Access-Control-Allow-Origin"); got != "" {
@@ -167,7 +167,7 @@ func TestCORSDevOnly(t *testing.T) {
 	prodCfg.Env = "prod"
 	prodS := newTestServer(t, prodCfg)
 	rec3 := httptest.NewRecorder()
-	req3 := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req3 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	req3.Header.Set("Origin", "http://localhost:5173")
 	prodS.ServeHTTP(rec3, req3)
 	if got := rec3.Header().Get("Access-Control-Allow-Origin"); got != "" {
@@ -181,7 +181,7 @@ func TestCORSPreflight(t *testing.T) {
 	s := newTestServer(t, cfg)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodOptions, "/api/anything", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/api/anything", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	s.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {

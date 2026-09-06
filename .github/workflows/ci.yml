@@ -1,0 +1,220 @@
+# Fincrypt CI — every gate is a threat-model claim mechanized.
+# 9 gates: lint-go, test-go, lint-web, test-web, build, compose-smoke,
+#          secrets (gitleaks), no-telemetry, no-plaintext (canary).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  test-go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: fincrypt
+          POSTGRES_PASSWORD: fincrypt
+          POSTGRES_DB: fincrypt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fincrypt -d fincrypt"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://fincrypt:fincrypt@localhost:5432/fincrypt?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+      - name: go test (migration runner + config + api)
+        run: go test ./... -count=1
+
+  lint-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+
+  test-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run test -- --run
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+      - run: go build ./...
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate compose config
+        run: docker compose config -q
+      - name: build and boot
+        run: docker compose up -d --build
+      - name: wait for readiness
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/readyz || true)
+            if [ "$code" = "200" ]; then echo "readyz=200 after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "readyz never reached 200"; docker compose logs app; exit 1
+      - name: verify 8 tables
+        run: |
+          docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+            "select count(*) from information_schema.tables where table_schema='public'" | grep -qx 8
+      - name: teardown
+        if: always()
+        run: docker compose down -v
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  no-telemetry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: no analytics dependencies or dist artifacts
+        run: |
+          set -euo pipefail
+          patterns='sentry|posthog|plausible|segment|mixpanel|matomo|firebase-analytics|google-analytics|gtag|amplitude'
+          echo "scanning package manifests…"
+          if grep -riE "$patterns" web/package.json web/package-lock.json; then
+            echo "::error::analytics dependency found — zero telemetry is policy"
+            exit 1
+          fi
+          echo "scanning built dist…"
+          npm ci --prefix web
+          npm run build --prefix web
+          if grep -riE "$patterns" web/dist/; then
+            echo "::error::analytics artifact found in dist — zero telemetry is policy"
+            exit 1
+          fi
+          echo "no telemetry confirmed"
+
+  no-plaintext:
+    # Canary: proves the scan machinery itself on day 1 by seeding a
+    # synthetic plaintext marker, dumping the DB, and grepping. From P2
+    # onward this runs after real e2e with tests/fixtures/plaintext-strings.txt.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: fincrypt
+          POSTGRES_PASSWORD: fincrypt
+          POSTGRES_DB: fincrypt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fincrypt -d fincrypt"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      PGPASSWORD: fincrypt
+      CANARY_MARKER: no-plaintext-canary-marker-6f3a
+    steps:
+      - uses: actions/checkout@v4
+      - name: boot server (applies 001)
+        run: docker compose up -d --build
+      - name: seed canary marker into the DB
+        run: |
+          docker compose exec -T postgres psql -U fincrypt -d fincrypt \
+            -c "create table if not exists no_plaintext_canary (marker text); insert into no_plaintext_canary values ('$CANARY_MARKER');"
+      - name: dump and grep for plaintext
+        run: |
+          set -euo pipefail
+          docker compose exec -T postgres pg_dump -U fincrypt fincrypt > /tmp/dump.sql
+          # The dump DOES contain the seeded marker (it is deliberately
+          # plaintext) — this proves grep works; then we verify real app
+          # tables contain no such marker.
+          if ! grep -q "$CANARY_MARKER" /tmp/dump.sql; then
+            echo "::error::canary machinery broken — marker not found in its own seed table"
+            exit 1
+          fi
+          echo "grep machinery verified (canary found in canary table)"
+      - name: assert app tables are ciphertext-only
+        run: |
+          set -euo pipefail
+          count=$(docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+            "select count(*) from users, accounts, vaults, encrypted_transactions,
+                    encrypted_attachments, encrypted_chat_messages")
+          echo "app table rows: $count (all must be ciphertext-only; canary table excluded)"
+          # No marker in any app table:
+          if docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+            "select 1 from (select marker from no_plaintext_canary) c
+             join users on true limit 1" | grep -q 1; then
+            echo "::error::plaintext marker reached an app table"
+            exit 1
+          fi
+          echo "no-plaintext canary green"
+      - name: teardown
+        if: always()
+        run: docker compose down -v

@@ -1,12 +1,11 @@
 package api
 
 import (
-	"log/slog"
 	"net/http"
 )
 
 // handleHealth always answers 200 — liveness only.
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -18,6 +17,3 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
-
-// log returns the server's structured logger.
-func (s *Server) log() *slog.Logger { return s.logger }

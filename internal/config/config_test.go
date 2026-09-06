@@ -61,8 +61,18 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+// unsetenv removes a var for absence tests — t.Setenv cannot unset, and
+// a host shell may legitimately export DATABASE_URL/SESSION_KEYS.
+func unsetenv(t *testing.T, key string) {
+	t.Helper()
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("unset %s: %v", key, err)
+	}
+}
+
 func TestLoadMissingDatabaseURL(t *testing.T) {
 	t.Setenv("SESSION_KEYS", genKey(t))
+	unsetenv(t, "DATABASE_URL")
 
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
@@ -72,6 +82,7 @@ func TestLoadMissingDatabaseURL(t *testing.T) {
 
 func TestLoadMissingSessionKeys(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
+	unsetenv(t, "SESSION_KEYS")
 
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "SESSION_KEYS") {
