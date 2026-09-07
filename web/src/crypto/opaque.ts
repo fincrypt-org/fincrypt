@@ -17,6 +17,9 @@
  * we use the lowercase email. The server never sees the password.
  */
 import * as opaque from '@serenity-kit/opaque'
+import { fromB64, toB64 } from './b64'
+
+export { fromB64, toB64 }
 
 /** JSON request/response pair — mirrors what P2's HTTP handlers will do. */
 export interface Transport {
@@ -37,23 +40,7 @@ export interface LoginResult {
   serverStaticPublicKey: string
 }
 
-export function toB64(bytes: Uint8Array): string {
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary)
-}
 
-/**
- * serenity-kit/opaque emits base64-URL strings ('-' instead of '+').
- * fromB64 accepts both alphabets.
- */
-export function fromB64(b64: string): Uint8Array {
-  const standard = b64.replace(/-/g, '+').replace(/_/g, '/')
-  const binary = atob(standard)
-  const out = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
-  return out
-}
 
 /** canonicalUserIdentifier lowercases the email — the server's citext handles case-insensitivity. */
 export function canonicalUserIdentifier(email: string): string {

@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { buildAad, decrypt, encrypt, importAesKey } from './aead'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { ensureTestCrypto } from './test-env'
+import { buildAad, buildAadString, decryptBytes, encryptBytes, importAesKey } from './aead'
+
+beforeAll(() => { ensureTestCrypto() })
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -21,64 +24,64 @@ describe('aead', () => {
   it('roundtrips plaintext with AAD', async () => {
     const key = await importAesKey(NIST_KEY)
     const aad = buildAad('u-123', 'transactions', 't-456')
-    const packed = await encrypt(key, enc.encode('hello'), aad)
+    const packed = await encryptBytes(key, enc.encode('hello'), aad)
     expect(packed.length).toBe(12 + 5 + 16) // nonce + plaintext + 16-byte tag
-    const pt = await decrypt(key, packed, aad)
+    const pt = await decryptBytes(key, packed, aad)
     expect(dec.decode(pt)).toBe('hello')
   })
 
   it('rejects empty AAD on encrypt and decrypt', async () => {
     const key = await importAesKey(NIST_KEY)
-    await expect(encrypt(key, enc.encode('x'), '')).rejects.toThrow(/mandatory/)
-    await expect(decrypt(key, new Uint8Array(29), '')).rejects.toThrow(/mandatory/)
+    await expect(encryptBytes(key, enc.encode('x'), '')).rejects.toThrow(/mandatory/)
+    await expect(decryptBytes(key, new Uint8Array(29), '')).rejects.toThrow(/mandatory/)
   })
 
   it('fails decryption with wrong AAD (different user)', async () => {
     const key = await importAesKey(NIST_KEY)
-    const packed = await encrypt(
+    const packed = await encryptBytes(
       key,
       enc.encode('secret'),
       buildAad('user-a', 'transactions', 'r1'),
     )
-    await expect(decrypt(key, packed, buildAad('user-b', 'transactions', 'r1'))).rejects.toThrow()
+    await expect(decryptBytes(key, packed, buildAad('user-b', 'transactions', 'r1'))).rejects.toThrow()
   })
 
   it('fails decryption when ciphertexts are swapped between records (AAD-swap test)', async () => {
     const key = await importAesKey(NIST_KEY)
     // Record 1 and record 2, same key, same user — only record_id differs in AAD.
-    const packed1 = await encrypt(
+    const packed1 = await encryptBytes(
       key,
       enc.encode('record-one-data'),
       buildAad('user-a', 'transactions', 'r1'),
     )
-    const packed2 = await encrypt(
+    const packed2 = await encryptBytes(
       key,
       enc.encode('record-two-data'),
       buildAad('user-a', 'transactions', 'r2'),
     )
 
     // Server (or a tamperer) swaps the blobs — decryption must fail for both.
-    await expect(decrypt(key, packed2, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
-    await expect(decrypt(key, packed1, buildAad('user-a', 'transactions', 'r2'))).rejects.toThrow()
+    await expect(decryptBytes(key, packed2, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
+    await expect(decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r2'))).rejects.toThrow()
 
     // The originals still decrypt under their own AAD.
-    expect(dec.decode(await decrypt(key, packed1, buildAad('user-a', 'transactions', 'r1')))).toBe(
+    expect(dec.decode(await decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r1')))).toBe(
       'record-one-data',
     )
   })
 
   it('fails decryption when record type differs', async () => {
     const key = await importAesKey(NIST_KEY)
-    const packed = await encrypt(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
-    await expect(decrypt(key, packed, buildAad('user-a', 'chat', 'r1'))).rejects.toThrow()
+    const packed = await encryptBytes(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
+    await expect(decryptBytes(key, packed, buildAad('user-a', 'chat', 'r1'))).rejects.toThrow()
   })
 
   it('fails decryption on tampered ciphertext', async () => {
     const key = await importAesKey(NIST_KEY)
-    const packed = await encrypt(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
+    const packed = await encryptBytes(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
     const last = packed.length - 1
     packed[last] = (packed[last] ?? 0) ^ 0x01
-    await expect(decrypt(key, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
+    await expect(decryptBytes(key, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
   })
 
   it('wrong key fails decryption (wrong passphrase path)', async () => {
@@ -86,15 +89,15 @@ describe('aead', () => {
     const otherKeyBytes = new Uint8Array(32)
     otherKeyBytes.fill(0x42)
     const keyB = await importAesKey(otherKeyBytes)
-    const packed = await encrypt(keyA, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
-    await expect(decrypt(keyB, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
+    const packed = await encryptBytes(keyA, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
+    await expect(decryptBytes(keyB, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
   })
 
   it('rejects truncated packed blobs', async () => {
     const key = await importAesKey(NIST_KEY)
     await expect(
-      decrypt(key, new Uint8Array(12), buildAad('u', 'transactions', 'r')),
-    ).rejects.toThrow(/too short/)
+      decryptBytes(key, new Uint8Array(12), buildAad('u', 'transactions', 'r')),
+    ).rejects.toThrow(/decryption failed/)
   })
 
   it('AAD builder rejects malformed components', () => {
@@ -103,7 +106,8 @@ describe('aead', () => {
     expect(() => buildAad('u', 'transactions', '')).toThrow(/invalid AAD component/)
     // @ts-expect-error — runtime guard for types not in RECORD_TYPES
     expect(() => buildAad('u', 'bogus-type', 'r')).toThrow(/unknown record type/)
-    expect(buildAad('u', 'vault', 'settings')).toBe('v1|u|vault|settings')
+    expect(new TextDecoder().decode(buildAad('u', 'vault', 'settings'))).toBe('v1|u|vault|settings')
+    expect(buildAadString('u', 'vault', 'settings')).toBe('v1|u|vault|settings')
   })
 
   it('nonce uniqueness: 1000 encryptions of the same plaintext never reuse a nonce', async () => {
@@ -111,7 +115,7 @@ describe('aead', () => {
     const aad = buildAad('user-a', 'transactions', 'r1')
     const nonces = new Set<string>()
     for (let i = 0; i < 1000; i++) {
-      const packed = await encrypt(key, enc.encode('same plaintext'), aad)
+      const packed = await encryptBytes(key, enc.encode('same plaintext'), aad)
       const nonceHex = [...packed.slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('')
       expect(nonces.has(nonceHex)).toBe(false) // fresh 12-byte nonce per write
       nonces.add(nonceHex)
