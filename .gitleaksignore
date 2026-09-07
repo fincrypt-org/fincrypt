@@ -1,8 +1,13 @@
 # Fincrypt — known non-secrets excluded from gitleaks scanning.
 # Format: [commit:]file:rule:line (from gitleaks --verbose output).
 # All entries are PUBLISHED cryptographic test vectors (NIST/RFC), not secrets.
+#
+# NOTE: the finding's line number shifts when the fixture file is edited.
+# Known positions of the NIST GCM AES-256 TC3 key_hex are listed here;
+# if a new line appears, re-run gitleaks --verbose and add the new
+# fingerprint (the vector itself is a published textbook constant).
 
-# NIST GCM spec Appendix B AES-256 test case 3 — the published key_hex
-# feffe9928665731c... matches the generic-api-key rule. It is a textbook
-# vector, not a credential.
+# NIST GCM spec Appendix B AES-256 test case 3 — published key_hex
+# feffe9928665731c... (textbook vector, not a credential).
+web/src/crypto/vectors/index.json:generic-api-key:86
 web/src/crypto/vectors/index.json:generic-api-key:83
