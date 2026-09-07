@@ -159,7 +159,8 @@ export const sessionKeys = {
     aad: string,
   ): Promise<{ nonce: Uint8Array; ciphertext: Uint8Array }> {
     const s = useSessionKeys.getState()
-    if (s.locked || s.userId !== userId) throw new CryptoError('locked', 'keystore locked or user mismatch')
+    if (s.locked || s.userId !== userId)
+      throw new CryptoError('locked', 'keystore locked or user mismatch')
     const key = await s.getSubkey(type)
     const { encryptBytes } = await import('../crypto/aead')
     const packed = await encryptBytes(key, plaintext, new TextEncoder().encode(aad))

@@ -33,7 +33,13 @@ async function makeFixture(pass: string): Promise<Fixture> {
   const userId = 'user-a'
   const salt = crypto.getRandomValues(new Uint8Array(32))
   const dek = generateDek()
-  const bytes = await argon2idDerive(pass, salt, { alg: 'argon2id', version: 19, m: 8192, t: 1, p: 1 })
+  const bytes = await argon2idDerive(pass, salt, {
+    alg: 'argon2id',
+    version: 19,
+    m: 8192,
+    t: 1,
+    p: 1,
+  })
   const kek = await importKek(bytes)
   const wrapped = await wrapDek(dek, kek, userId)
   return { userId, salt, wrapped, dek }
@@ -93,13 +99,17 @@ describe('sessionKeys — keystore lifecycle', () => {
     const subkey = await sessionKeys.getSubkey('vault')
     expect(subkey.extractable).toBe(false)
     // the unwrapped DEK equals the original (independent derivation paths agree)
-    const bytes = await argon2idDerive('recovery-cross', crypto.getRandomValues(new Uint8Array(32)), {
-      alg: 'argon2id',
-      version: 19,
-      m: 8192,
-      t: 1,
-      p: 1,
-    })
+    const bytes = await argon2idDerive(
+      'recovery-cross',
+      crypto.getRandomValues(new Uint8Array(32)),
+      {
+        alg: 'argon2id',
+        version: 19,
+        m: 8192,
+        t: 1,
+        p: 1,
+      },
+    )
     void bytes
     sessionKeys.lock()
     await expect(sessionKeys.getSubkey('vault')).rejects.toMatchObject({ code: 'locked' })

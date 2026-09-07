@@ -141,7 +141,6 @@ describe('golden vectors (C1.8, I8 byte-stability)', () => {
       }
       mkdirSync(join(__dirname, '__vectors__'), { recursive: true })
       writeFileSync(GOLDEN_PATH, JSON.stringify(golden, null, 2))
-      console.log('golden vectors written (one-time) — file is now FROZEN')
       expect(golden.envelopes.length).toBe(2)
       return
     }

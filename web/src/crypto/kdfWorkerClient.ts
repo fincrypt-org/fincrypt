@@ -51,7 +51,7 @@ export async function deriveKekOffThread(
       worker.terminate()
       throw err
     }
-  } catch (spawnErr) {
+  } catch {
     // Worker unavailable (test env / restricted env) — derive inline.
     const kekBytes = await argon2idDerive(pass, salt, params)
     const kek = await importAesKey(kekBytes)

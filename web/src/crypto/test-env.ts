@@ -33,7 +33,6 @@ export function getSubtle(): SubtleCrypto {
   // bundled/test contexts it is reachable via globalThis when the
   // runtime is Node 22. Resolve it without importing node: modules in
   // the browser bundle (this file is test-only).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const nodeCrypto = (globalThis as Record<string, unknown>).crypto as
     { webcrypto?: Crypto } | undefined
   if (nodeCrypto?.webcrypto) {

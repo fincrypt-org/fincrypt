@@ -62,7 +62,11 @@ export default [
       ],
       'no-restricted-properties': [
         'error',
-        { object: 'document', property: 'cookie', message: 'I7: keys are never persisted in cookies' },
+        {
+          object: 'document',
+          property: 'cookie',
+          message: 'I7: keys are never persisted in cookies',
+        },
       ],
     },
   },
