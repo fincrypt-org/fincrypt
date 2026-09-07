@@ -108,9 +108,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: validate compose config
-        run: docker compose config -q
+        run: docker compose -f docker-compose.yml config -q
       - name: build and boot
-        run: docker compose up -d --build
+        # Base file only — docker-compose.override.yml publishes 5432 for
+        # local dev and would clash with the test-go service container here.
+        run: docker compose -f docker-compose.yml up -d --build
       - name: wait for readiness
         run: |
           for i in $(seq 1 60); do
@@ -118,14 +120,14 @@ jobs:
             if [ "$code" = "200" ]; then echo "readyz=200 after ${i}s"; exit 0; fi
             sleep 1
           done
-          echo "readyz never reached 200"; docker compose logs app; exit 1
+          echo "readyz never reached 200"; docker compose -f docker-compose.yml logs app; exit 1
       - name: verify 8 tables
         run: |
-          docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+          docker compose -f docker-compose.yml exec -T postgres psql -U fincrypt -d fincrypt -tAc \
             "select count(*) from information_schema.tables where table_schema='public'" | grep -qx 8
       - name: teardown
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml down -v
 
   secrets:
     runs-on: ubuntu-latest
@@ -187,15 +189,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: boot server (applies 001)
-        run: docker compose up -d --build
+        run: docker compose -f docker-compose.yml up -d --build
       - name: seed canary marker into the DB
         run: |
-          docker compose exec -T postgres psql -U fincrypt -d fincrypt \
+          docker compose -f docker-compose.yml exec -T postgres psql -U fincrypt -d fincrypt \
             -c "create table if not exists no_plaintext_canary (marker text); insert into no_plaintext_canary values ('$CANARY_MARKER');"
       - name: dump and grep for plaintext
         run: |
           set -euo pipefail
-          docker compose exec -T postgres pg_dump -U fincrypt fincrypt > /tmp/dump.sql
+          docker compose -f docker-compose.yml exec -T postgres pg_dump -U fincrypt fincrypt > /tmp/dump.sql
           # The dump DOES contain the seeded marker (it is deliberately
           # plaintext) — this proves grep works; then we verify real app
           # tables contain no such marker.
@@ -207,12 +209,12 @@ jobs:
       - name: assert app tables are ciphertext-only
         run: |
           set -euo pipefail
-          count=$(docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+          count=$(docker compose -f docker-compose.yml exec -T postgres psql -U fincrypt -d fincrypt -tAc \
             "select count(*) from users, accounts, vaults, encrypted_transactions,
                     encrypted_attachments, encrypted_chat_messages")
           echo "app table rows: $count (all must be ciphertext-only; canary table excluded)"
           # No marker in any app table:
-          if docker compose exec -T postgres psql -U fincrypt -d fincrypt -tAc \
+          if docker compose -f docker-compose.yml exec -T postgres psql -U fincrypt -d fincrypt -tAc \
             "select 1 from (select marker from no_plaintext_canary) c
              join users on true limit 1" | grep -q 1; then
             echo "::error::plaintext marker reached an app table"
@@ -221,4 +223,4 @@ jobs:
           echo "no-plaintext canary green"
       - name: teardown
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml down -v
