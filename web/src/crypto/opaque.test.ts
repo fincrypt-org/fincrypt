@@ -72,8 +72,8 @@ describe('opaque — OPAQUE (RFC 9807) client wrapper', () => {
     // This is the P2 contract preview: the OPAQUE exportKey (client-only,
     // stable across logins) can serve as KEK input. We prove stability and
     // byte-length here; the full KEK wiring lands with P2 endpoints.
-    const { generateDek, wrapDekWithRecovery, unwrapDekWithRecovery } = await import('./vaultKey')
-    const { deriveRecoveryKek } = await import('./recovery')
+    const { generateDek, wrapWithRecovery, unwrapWithRecovery } = await import('./keyHierarchy')
+    const { deriveRecoveryKek, generateRecoveryPhrase } = await import('./recovery')
     const server = new MockOpaqueServer()
     const reg = await register(server, 'user@example.com', PASSWORD)
     const session = await login(server, 'user@example.com', PASSWORD)
@@ -83,11 +83,11 @@ describe('opaque — OPAQUE (RFC 9807) client wrapper', () => {
     expect(exportBytes.length).toBe(64)
 
     // Sanity: recovery KEK + DEK envelope still compose (independent path)
-    const phrase = (await import('./recovery')).generateRecoveryPhrase()
+    const phrase = generateRecoveryPhrase().mnemonic
     const recoveryKek = await deriveRecoveryKek(phrase)
     const dek = generateDek()
-    const wrapped = await wrapDekWithRecovery(recoveryKek, dek)
-    expect([...(await unwrapDekWithRecovery(recoveryKek, wrapped))]).toEqual([...dek])
+    const wrapped = await wrapWithRecovery(dek, recoveryKek, 'user-a')
+    expect([...(await unwrapWithRecovery(wrapped, recoveryKek, 'user-a'))]).toEqual([...dek])
     void reg
   })
 })

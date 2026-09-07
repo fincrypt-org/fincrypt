@@ -15,7 +15,6 @@
 import { DecryptError, asDecryptError } from './errors'
 
 const NONCE_BYTES = 12
-const TAG_BITS = 128
 
 /** Record types that may appear in AAD — kept in one place so the AAD grammar is total. */
 export const RECORD_TYPES = ['transactions', 'attachments', 'chat', 'accounts', 'vault'] as const

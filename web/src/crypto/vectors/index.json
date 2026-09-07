@@ -48,15 +48,18 @@
   "bip39-official": [
     {
       "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-      "seed_hex": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa5c6a68587c68da0c0649677119dbd3034d"
+      "seed_hex": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
     },
     {
       "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
-      "seed_hex": "2e8905819b8723dae20954237cdef4b8ee52a8a0523d0f678d422b3a10a4e7848dac3d90424eb1a2e2ac754cd620b9ee4ff5adcecc49d40d01063ae844b2f4d"
+      "seed_hex": "878386efb78845b3355bd15ea4d39ef97d179cb712b77d5c12b6be415fffeffe5f377ba02bf3f8544ab800b955e51fbff09828f682052a20faa6addbbddfb096",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
     },
     {
       "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
-      "seed_hex": "ac27495480225222079d7be181583751e86f571027b0497b5b5d11218e0a8a13332572917f0f8e5a589620c6f15b11c61dee327651a0c5e7ba9338eb92800a0"
+      "seed_hex": "b6a6d8921942dd9806607ebc2750416b289adea669198769f2e15ed926c3aa92bf88ece232317b4ea463e84b0fcd3b53577812ee449ccc448eb45e6f544e25b6",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
     }
   ],
   "aes-gcm-kat": [

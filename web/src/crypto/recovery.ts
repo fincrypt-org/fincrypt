@@ -11,7 +11,13 @@
  */
 import { mnemonicToSeedSync, validateMnemonic, generateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
-import { hkdfBits, hkdfSaltBytes, wrapWithRecovery, unwrapWithRecovery, type RawKey } from './keyHierarchy'
+import {
+  hkdfBits,
+  hkdfSaltBytes,
+  wrapWithRecovery,
+  unwrapWithRecovery,
+  type RawKey,
+} from './keyHierarchy'
 import { importAesKey } from './aead'
 import { CryptoError } from './errors'
 
@@ -28,13 +34,7 @@ export function generateRecoveryPhrase(): { words: string[]; mnemonic: string } 
  * restore is forgiving about formatting but nothing else.
  */
 export function normalizePhrase(input: string): string {
-  return input
-    .normalize('NFKD')
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(' ')
+  return input.normalize('NFKD').trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ')
 }
 
 /** validateRecoveryPhrase checks words against the English wordlist + checksum. */
@@ -83,11 +83,18 @@ export async function recoverDek(
 /**
  * pickConfirmIndices: 3 distinct indices of 0..11 for the
  * retype-confirmation flow at signup. Injectable rng for tests.
+ * (rng returning a constant is a degenerate case — we shuffle a fixed
+ * list instead of rejection-sampling, so it always terminates.)
  */
 export function pickConfirmIndices(rng: () => number = Math.random): [number, number, number] {
-  const draw = (): number => Math.floor(rng() * 12)
-  const set = new Set<number>()
-  while (set.size < 3) set.add(draw())
-  const [a, b, c] = [...set] as [number, number, number]
-  return [a, b, c]
+  const indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  // Fisher–Yates with the injected rng
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    const capped = Math.min(Math.max(j, 0), i)
+    const tmp = indices[i] as number
+    indices[i] = indices[capped] as number
+    indices[capped] = tmp
+  }
+  return [indices[0] as number, indices[1] as number, indices[2] as number]
 }

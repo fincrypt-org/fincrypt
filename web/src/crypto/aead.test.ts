@@ -2,7 +2,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { ensureTestCrypto } from './test-env'
 import { buildAad, buildAadString, decryptBytes, encryptBytes, importAesKey } from './aead'
 
-beforeAll(() => { ensureTestCrypto() })
+beforeAll(() => {
+  ensureTestCrypto()
+})
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -32,8 +34,10 @@ describe('aead', () => {
 
   it('rejects empty AAD on encrypt and decrypt', async () => {
     const key = await importAesKey(NIST_KEY)
-    await expect(encryptBytes(key, enc.encode('x'), '')).rejects.toThrow(/mandatory/)
-    await expect(decryptBytes(key, new Uint8Array(29), '')).rejects.toThrow(/mandatory/)
+    await expect(encryptBytes(key, enc.encode('x'), new Uint8Array(0))).rejects.toThrow(/mandatory/)
+    await expect(decryptBytes(key, new Uint8Array(29), new Uint8Array(0))).rejects.toThrow(
+      /mandatory/,
+    )
   })
 
   it('fails decryption with wrong AAD (different user)', async () => {
@@ -43,7 +47,9 @@ describe('aead', () => {
       enc.encode('secret'),
       buildAad('user-a', 'transactions', 'r1'),
     )
-    await expect(decryptBytes(key, packed, buildAad('user-b', 'transactions', 'r1'))).rejects.toThrow()
+    await expect(
+      decryptBytes(key, packed, buildAad('user-b', 'transactions', 'r1')),
+    ).rejects.toThrow()
   })
 
   it('fails decryption when ciphertexts are swapped between records (AAD-swap test)', async () => {
@@ -61,27 +67,41 @@ describe('aead', () => {
     )
 
     // Server (or a tamperer) swaps the blobs — decryption must fail for both.
-    await expect(decryptBytes(key, packed2, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
-    await expect(decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r2'))).rejects.toThrow()
+    await expect(
+      decryptBytes(key, packed2, buildAad('user-a', 'transactions', 'r1')),
+    ).rejects.toThrow()
+    await expect(
+      decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r2')),
+    ).rejects.toThrow()
 
     // The originals still decrypt under their own AAD.
-    expect(dec.decode(await decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r1')))).toBe(
-      'record-one-data',
-    )
+    expect(
+      dec.decode(await decryptBytes(key, packed1, buildAad('user-a', 'transactions', 'r1'))),
+    ).toBe('record-one-data')
   })
 
   it('fails decryption when record type differs', async () => {
     const key = await importAesKey(NIST_KEY)
-    const packed = await encryptBytes(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
+    const packed = await encryptBytes(
+      key,
+      enc.encode('data'),
+      buildAad('user-a', 'transactions', 'r1'),
+    )
     await expect(decryptBytes(key, packed, buildAad('user-a', 'chat', 'r1'))).rejects.toThrow()
   })
 
   it('fails decryption on tampered ciphertext', async () => {
     const key = await importAesKey(NIST_KEY)
-    const packed = await encryptBytes(key, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
+    const packed = await encryptBytes(
+      key,
+      enc.encode('data'),
+      buildAad('user-a', 'transactions', 'r1'),
+    )
     const last = packed.length - 1
     packed[last] = (packed[last] ?? 0) ^ 0x01
-    await expect(decryptBytes(key, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
+    await expect(
+      decryptBytes(key, packed, buildAad('user-a', 'transactions', 'r1')),
+    ).rejects.toThrow()
   })
 
   it('wrong key fails decryption (wrong passphrase path)', async () => {
@@ -89,8 +109,14 @@ describe('aead', () => {
     const otherKeyBytes = new Uint8Array(32)
     otherKeyBytes.fill(0x42)
     const keyB = await importAesKey(otherKeyBytes)
-    const packed = await encryptBytes(keyA, enc.encode('data'), buildAad('user-a', 'transactions', 'r1'))
-    await expect(decryptBytes(keyB, packed, buildAad('user-a', 'transactions', 'r1'))).rejects.toThrow()
+    const packed = await encryptBytes(
+      keyA,
+      enc.encode('data'),
+      buildAad('user-a', 'transactions', 'r1'),
+    )
+    await expect(
+      decryptBytes(keyB, packed, buildAad('user-a', 'transactions', 'r1')),
+    ).rejects.toThrow()
   })
 
   it('rejects truncated packed blobs', async () => {

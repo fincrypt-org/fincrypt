@@ -28,7 +28,12 @@ export async function deriveKekOffThread(
     const worker = new mod.default()
     try {
       const kekBytes = await new Promise<Uint8Array>((resolve, reject) => {
-        const req: KdfWorkerRequest = { type: 'derive', pass, salt, paramsJson: serializeKdfParams(params) }
+        const req: KdfWorkerRequest = {
+          type: 'derive',
+          pass,
+          salt,
+          paramsJson: serializeKdfParams(params),
+        }
         worker.onmessage = (event: MessageEvent<KdfWorkerResponse | { error: string }>) => {
           if ('error' in event.data) {
             reject(new Error(event.data.error))

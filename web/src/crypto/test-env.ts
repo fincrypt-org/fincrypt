@@ -35,8 +35,7 @@ export function getSubtle(): SubtleCrypto {
   // the browser bundle (this file is test-only).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const nodeCrypto = (globalThis as Record<string, unknown>).crypto as
-    | { webcrypto?: Crypto }
-    | undefined
+    { webcrypto?: Crypto } | undefined
   if (nodeCrypto?.webcrypto) {
     return nodeCrypto.webcrypto.subtle
   }
@@ -49,8 +48,7 @@ export function getSubtle(): SubtleCrypto {
 export function ensureTestCrypto(): CryptoBridgeResult {
   if (typeof globalThis.crypto?.subtle !== 'undefined') return { mode: 'native' }
   const nodeCrypto = (globalThis as Record<string, unknown>).crypto as
-    | { webcrypto?: Crypto }
-    | undefined
+    { webcrypto?: Crypto } | undefined
   if (nodeCrypto?.webcrypto) {
     Object.defineProperty(globalThis, 'crypto', {
       value: nodeCrypto.webcrypto,

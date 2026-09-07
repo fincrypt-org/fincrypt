@@ -1,6 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { ensureTestCrypto } from './test-env'
-import { DEFAULT_KDF_PARAMS, argon2idDerive, deriveKek, generateKdfSalt, parseKdfParams, serializeKdfParams } from './kdf'
+import {
+  DEFAULT_KDF_PARAMS,
+  argon2idDerive,
+  deriveKek,
+  generateKdfSalt,
+  parseKdfParams,
+  serializeKdfParams,
+} from './kdf'
 import { importKek } from './kdf'
 import fixtures from './vectors/index.json'
 import { importAesKey } from './aead'
@@ -22,7 +29,14 @@ describe('kdf — RFC 9106 fixture', () => {
   // RustCrypto reference KAT suite (same algorithm family, v0x13).
 
   it('matches RustCrypto reference Argon2id v0x13 KATs (no secret, no AD, h=32)', async () => {
-    const cases: Array<{ pass: string; salt: string; t: number; m: number; p: number; tag: string }> = [
+    const cases: Array<{
+      pass: string
+      salt: string
+      t: number
+      m: number
+      p: number
+      tag: string
+    }> = [
       {
         pass: 'password',
         salt: 'somesalt',
@@ -141,7 +155,13 @@ describe('kdf — salt and params', () => {
 
 describe('kdf — KEK import', () => {
   it('deriveKek returns a usable non-extractable AES-GCM key', async () => {
-    const kek = await deriveKek('passphrase', generateKdfSalt(), { alg: 'argon2id', version: 19, m: 8192, t: 1, p: 1 })
+    const kek = await deriveKek('passphrase', generateKdfSalt(), {
+      alg: 'argon2id',
+      version: 19,
+      m: 8192,
+      t: 1,
+      p: 1,
+    })
     // non-extractable: exportKey must reject
     await expect(crypto.subtle.exportKey('raw', kek)).rejects.toThrow()
     // usable for GCM

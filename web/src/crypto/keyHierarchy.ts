@@ -25,16 +25,18 @@ const HKDF_SALT_LABEL = 'fincrypt/v1/hkdf'
 export type RawKey = Uint8Array
 
 /** HKDF-SHA256 raw bits (RFC 5869-testable core). */
-export function hkdfBits(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, bits: number): Uint8Array {
+export function hkdfBits(
+  ikm: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  bits: number,
+): Uint8Array {
   // @noble/hashes hkdf output is bytes; bits must be a multiple of 8
   if (bits % 8 !== 0 || bits <= 0 || bits > 255 * 32) {
     throw new WrapError('hkdf: invalid bit length')
   }
-  return hkdfSha256(ikm, salt, info, bits / 8)
+  return hkdf(sha256, ikm, salt, info, bits / 8)
 }
-
-import { hkdf as hkdfSha256 } from '@noble/hashes/hkdf.js'
-import { sha256 } from '@noble/hashes/sha2.js'
 
 /** The D1 HKDF salt, exposed for tests. */
 export function hkdfSaltBytes(): Uint8Array {
@@ -89,13 +91,21 @@ export async function unwrapDek(w: Uint8Array, kek: CryptoKey, userId: string): 
 }
 
 /** Recovery-phrase wrap/unwrap: same packing, D3 recovery AAD. */
-export async function wrapWithRecovery(dek: RawKey, kek: CryptoKey, userId: string): Promise<Uint8Array> {
+export async function wrapWithRecovery(
+  dek: RawKey,
+  kek: CryptoKey,
+  userId: string,
+): Promise<Uint8Array> {
   if (dek.length !== DEK_BYTES) throw new WrapError(`DEK must be ${DEK_BYTES} bytes`)
   if (userId.length === 0) throw new WrapError('userId required for wrap AAD')
   return encryptBytes(kek, dek, wrapAad(userId, 'wrapped-dek-recovery'))
 }
 
-export async function unwrapWithRecovery(w: Uint8Array, kek: CryptoKey, userId: string): Promise<RawKey> {
+export async function unwrapWithRecovery(
+  w: Uint8Array,
+  kek: CryptoKey,
+  userId: string,
+): Promise<RawKey> {
   if (w.length !== 60) throw new WrapError('wrapped DEK must be 60 bytes')
   try {
     const dek = await decryptBytes(kek, w, wrapAad(userId, 'wrapped-dek-recovery'))

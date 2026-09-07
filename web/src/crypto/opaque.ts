@@ -40,8 +40,6 @@ export interface LoginResult {
   serverStaticPublicKey: string
 }
 
-
-
 /** canonicalUserIdentifier lowercases the email — the server's citext handles case-insensitivity. */
 export function canonicalUserIdentifier(email: string): string {
   const normalized = email.trim().toLowerCase()
