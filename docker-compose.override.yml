@@ -1,0 +1,7 @@
+# Local-dev override: publish postgres on the host for `make test` /
+# `go test ./internal/db`. CI does NOT use this file (its job runs the
+# postgres service container and would clash on 5432 — see ci.yml).
+services:
+  postgres:
+    ports:
+      - "5432:5432"
