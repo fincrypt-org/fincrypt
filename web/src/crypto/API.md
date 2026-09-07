@@ -30,6 +30,15 @@ export requires a `THREAT_MODEL.md` delta in the same PR
 // errors (I6)
 class CryptoError extends Error { code: CryptoErrorCode }
 class DecryptError extends CryptoError   // 'decryption failed' — the only decrypt error
+class InvalidInputError extends CryptoError    // code 'invalid_input'
+class InvalidParamsError extends CryptoError   // code 'invalid_params' (kdf params guard)
+class InvalidKeyError extends CryptoError      // code 'invalid_key'
+class WrapError extends CryptoError            // code 'wrap_failed' (wrong passphrase/phrase, replay)
+class InvalidEnvelopeError extends CryptoError // code 'invalid_envelope'
+asDecryptError(err: unknown): DecryptError     // normalize any decrypt-path throw
+type CryptoErrorCode =
+  | 'decryption_failed' | 'invalid_input' | 'invalid_params' | 'invalid_phrase'
+  | 'invalid_key' | 'wrap_failed' | 'invalid_envelope' | 'locked' | 'not_supported'
 
 // b64 (I5)
 toB64(bytes: Uint8Array): string
