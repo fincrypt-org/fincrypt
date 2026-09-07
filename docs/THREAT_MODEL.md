@@ -63,6 +63,26 @@ You are the operator. The consequences are yours to weigh:
 - Smart scan through your own endpoint sends document images to that
   endpoint in the clear **on your machine only**.
 
+## Crypto implementation record
+
+- **PAKE: OPAQUE (RFC 9807)** — the plan's SRP-6a fallback was NOT needed:
+  `@serenity-kit/opaque` 1.1.0 (WASM bindings of `opaque-ke`, which was
+  NCC-audited for WhatsApp) implements the finalized RFC with a clean
+  browser API and stable client-side `exportKey`. The Go server side
+  (Phase 2) uses `github.com/bytemare/opaque`, written by an RFC author.
+  Client wrapper: `web/src/crypto/opaque.ts` behind a `Transport`
+  interface; wire messages are base64 OPAQUE protocol payloads plus the
+  `userIdentifier` (lowercase email) — no password material, asserted by
+  a wire-inspection test (`opaque.test.ts`).
+- **KDF: Argon2id** via hash-wasm (WASM), parameters in `users.kdf_params`
+  (default m=64 MiB, t=3, p=4 — RFC 9106's second recommended profile).
+  Verified byte-identical to Go x/crypto and RustCrypto reference KATs.
+- **AEAD: AES-256-GCM**, 12-byte random nonce, mandatory AAD
+  `v1|user_id|record_type|record_id` (swapping ciphertexts between
+  records fails decryption — test-enforced).
+- **Subkeys: HKDF-SHA256** off the DEK, info = record type.
+- **Recovery: BIP39 12-word phrase** → Argon2id-derived recovery KEK.
+
 ## Claims → tests (seeded; grows with the code)
 
 | Claim | Mechanized test | Status |
@@ -71,9 +91,10 @@ You are the operator. The consequences are yours to weigh:
 | No secrets in the repository | gitleaks on every push, org-level secret scanning + push protection | CI gate active |
 | Zero telemetry | CI `no-telemetry`: fails on any analytics dep or dist artifact | CI gate active |
 | Request logs never contain bodies or cookies | Go test asserts log output lacks request body and cookie material | unit test (P0) |
-| AAD mismatch fails decryption | crypto test: swapping ciphertexts between records must fail | P1 (planned) |
-| Wrong passphrase fails; KDF matches RFC 9106 vectors | crypto tests vs test vectors | P1 (planned) |
 | Migration history is immutable | checksum ledger + tamper test | unit test (P0) |
+| No password material on the wire (OPAQUE) | wire-inspection test greps every transport message for password/encoded-password | unit test (P1) |
+| Wrong passphrase fails unwrap; KDF matches reference KATs | crypto tests vs Go/RustCrypto-verified Argon2id vectors | unit test (P1) |
+| AAD mismatch fails decryption | crypto test: swapping ciphertexts between records must fail | unit test (P1) |
 
 ## What is deliberately NOT defended against (v1)
 
