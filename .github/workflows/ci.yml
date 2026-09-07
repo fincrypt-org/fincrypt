@@ -67,6 +67,18 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: storage ban grep (I7 — keys never persisted)
+        run: |
+          set -euo pipefail
+          hits=$(grep -rnE "localStorage|sessionStorage|indexedDB|document\.cookie" \
+            src/crypto src/stores --include='*.ts' --include='*.tsx' \
+            --exclude='*.test.ts' --exclude='*.test.tsx' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::I7 storage ban violated in crypto/keystore code:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "I7 grep clean"
       - run: npm run lint
 
   test-web:
