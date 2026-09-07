@@ -95,6 +95,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run test -- --run
+      - name: Playwright — /dev/crypto roundtrip in real Chromium (C1.9)
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test e2e/crypto.spec.ts --project=chromium --reporter=line
 
   build:
     runs-on: ubuntu-latest
