@@ -9,15 +9,15 @@ roundtrip/wrong-password/unknown-user suites.
 
 ## Pinned implementation
 
-| | |
-|---|---|
-| Library | `@serenity-kit/opaque` |
-| Version | **1.1.0** |
-| License | MIT |
-| Underlying | WASM bindings of `opaque-ke` (RustCrypto/Facebook), **NCC-audited** for WhatsApp E2EE backups (June 2021 audit; fixes in v1.2.0+) |
-| Ciphersuite | ristretto255 group (library default; P-256 variant exists as `@serenity-kit/opaque-p256`, not used) |
-| KSF | library default (`memory-constrained` Argon2id inside OPAQUE; our independent passphrase-KEK KDF is separate — see below) |
-| Integrity hash | sha512 of the tarball as installed in `web/package-lock.json` (npm integrity field pins it; `npm ci` enforces) |
+|                |                                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Library        | `@serenity-kit/opaque`                                                                                                            |
+| Version        | **1.1.0**                                                                                                                         |
+| License        | MIT                                                                                                                               |
+| Underlying     | WASM bindings of `opaque-ke` (RustCrypto/Facebook), **NCC-audited** for WhatsApp E2EE backups (June 2021 audit; fixes in v1.2.0+) |
+| Ciphersuite    | ristretto255 group (library default; P-256 variant exists as `@serenity-kit/opaque-p256`, not used)                               |
+| KSF            | library default (`memory-constrained` Argon2id inside OPAQUE; our independent passphrase-KEK KDF is separate — see below)         |
+| Integrity hash | sha512 of the tarball as installed in `web/package-lock.json` (npm integrity field pins it; `npm ci` enforces)                    |
 
 ## Client API surface (protocol-agnostic)
 
