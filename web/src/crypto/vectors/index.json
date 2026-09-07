@@ -1,0 +1,94 @@
+{
+  "hkdf-rfc5869": [
+    {
+      "name": "Case 1: basic",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "salt": "000102030405060708090a0b0c",
+      "info": "f0f1f2f3f4f5f6f7f8f9",
+      "L": 42,
+      "prk": "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50fb933122831c6aa5c6e3c",
+      "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+    },
+    {
+      "name": "Case 2: longer inputs/outputs",
+      "ikm": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+      "salt": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+      "info": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "L": 82,
+      "prk": "06a6b88c5853361a06104c9ceb35b45cef760014904671014a193f40c15fc044",
+      "okm": "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
+    },
+    {
+      "name": "Case 3: zero-length salt/info",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "salt": "",
+      "info": "",
+      "L": 42,
+      "prk": "19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c829c2e81",
+      "okm": "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+    }
+  ],
+  "argon2id-rfc9106": [
+    {
+      "name": "RFC 9106 5.3 Argon2id v0x13 (with secret + associated data)",
+      "params": {
+        "m_kib": 32,
+        "t": 3,
+        "p": 4
+      },
+      "password_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+      "salt_hex": "02020202020202020202020202020202",
+      "secret_hex": "0303030303030303",
+      "ad_hex": "040404040404040404040404",
+      "tag_len": 32,
+      "tag_hex": "0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659",
+      "note": "Reference vector; hash-wasm API lacks secret/AD params so our wrapper uses no-secret vectors (verified vs Go x/crypto + RustCrypto KAT suite) in kdf.test.ts."
+    }
+  ],
+  "bip39-official": [
+    {
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "seed_hex": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
+    },
+    {
+      "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      "seed_hex": "878386efb78845b3355bd15ea4d39ef97d179cb712b77d5c12b6be415fffeffe5f377ba02bf3f8544ab800b955e51fbff09828f682052a20faa6addbbddfb096",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
+    },
+    {
+      "mnemonic": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
+      "seed_hex": "b6a6d8921942dd9806607ebc2750416b289adea669198769f2e15ed926c3aa92bf88ece232317b4ea463e84b0fcd3b53577812ee449ccc448eb45e6f544e25b6",
+      "note": "BIP39 official mnemonic (trezor vectors.json), seed computed with EMPTY passphrase per D4 pin"
+    }
+  ],
+  "aes-gcm-kat": [
+    {
+      "name": "AES-256-GCM Test Case 1 (empty PT)",
+      "key_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "iv_hex": "000000000000000000000000",
+      "pt_hex": "",
+      "aad_hex": "",
+      "ct_hex": "",
+      "tag_hex": "530f8afbc74536b9a963b4f1c4cb738b"
+    },
+    {
+      "name": "AES-256-GCM Test Case 2 (16B PT)",
+      "key_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "iv_hex": "000000000000000000000000",
+      "pt_hex": "00000000000000000000000000000000",
+      "aad_hex": "",
+      "ct_hex": "cea7403d4d606b6e074ec5d3baf39d18",
+      "tag_hex": "d0d1c8a799996bf0265b98b5d48ab919"
+    },
+    {
+      "name": "AES-256-GCM Test Case 3 (with AAD)",
+      "key_hex": "feffe9928665731c6e655875502942d7326a4d0a4f4e0a15dd7ab5a936db962f",
+      "iv_hex": "cafebabefacedbaddecaf888",
+      "pt_hex": "d9313225f88406e5a55909c5aff5269a86a7a9531534f7da2e4c303d8a318a721c3c0c95956809532fcf0e2449a6b525b16aedf5aa0de657ba637b391aafd255",
+      "aad_hex": "feedfacedeadbeeffeedfacedeadbeefabaddad2",
+      "ct_hex": "42831ec2217774244b7221b784d0d49ce3aa212f2c02a4e035c17e2329aca12e21d514b25466931c7d8f6a5aac84aa051ba30b396a0aac973d58e091473f5985",
+      "tag_hex": "4d5c2af327cd64a62cf35abd2ba6fab4"
+    }
+  ]
+}

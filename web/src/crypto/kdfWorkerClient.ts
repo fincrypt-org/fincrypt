@@ -1,26 +1,15 @@
 /**
- * Main-thread client for the KDF Web Worker.
+ * Main-thread client for the KDF Web Worker (C1.1).
  * Falls back to in-thread derivation when Workers are unavailable
- * (happy-dom test environment, very old browsers) — the derivation
- * itself is identical.
+ * (happy-dom test environment) — the derivation itself is identical.
  */
-import { deriveKek, type KdfParams } from './kdf'
+import { argon2idDerive, serializeKdfParams, type KdfParams } from './kdf'
+import { importAesKey } from './aead'
 import type { KdfWorkerRequest, KdfWorkerResponse } from './kdfWorker'
 
-let workerUrl: string | null = null
-
-/** Internal: build the worker from a bundled module (Vite handles the ?worker suffix). */
-async function spawnWorker(): Promise<Worker> {
-  if (workerUrl == null) {
-    // Vite compiles `?worker&inline` to a blob URL so it also works from file:// and strict CSP.
-    const mod = await import('./kdfWorker?worker&inline')
-    return new mod.default()
-  }
-  return new Worker(workerUrl)
-}
-
 export interface DeriveKekOffThreadResult {
-  kek: Uint8Array
+  /** non-extractable AES-GCM KEK */
+  kek: CryptoKey
   /** true when a Web Worker ran the derivation (main thread stayed responsive) */
   offThread: boolean
 }
@@ -30,15 +19,21 @@ export interface DeriveKekOffThreadResult {
  * Errors from the worker surface here as thrown Errors.
  */
 export async function deriveKekOffThread(
-  password: Uint8Array,
+  pass: string,
   salt: Uint8Array,
-  params?: KdfParams,
+  params: KdfParams,
 ): Promise<DeriveKekOffThreadResult> {
   try {
-    const worker = await spawnWorker()
+    const mod = await import('./kdfWorker?worker&inline')
+    const worker = new mod.default()
     try {
-      const kek = await new Promise<Uint8Array>((resolve, reject) => {
-        const req: KdfWorkerRequest = { type: 'derive', password, salt, params }
+      const kekBytes = await new Promise<Uint8Array>((resolve, reject) => {
+        const req: KdfWorkerRequest = {
+          type: 'derive',
+          pass,
+          salt,
+          paramsJson: serializeKdfParams(params),
+        }
         worker.onmessage = (event: MessageEvent<KdfWorkerResponse | { error: string }>) => {
           if ('error' in event.data) {
             reject(new Error(event.data.error))
@@ -50,15 +45,16 @@ export async function deriveKekOffThread(
         worker.postMessage(req)
       })
       worker.terminate()
+      const kek = await importAesKey(kekBytes)
       return { kek, offThread: true }
     } catch (err) {
       worker.terminate()
       throw err
     }
-  } catch (spawnErr) {
-    if (spawnErr instanceof Error && spawnErr.message.startsWith('kdf:')) throw spawnErr
+  } catch {
     // Worker unavailable (test env / restricted env) — derive inline.
-    const kek = await deriveKek(password, salt, params)
+    const kekBytes = await argon2idDerive(pass, salt, params)
+    const kek = await importAesKey(kekBytes)
     return { kek, offThread: false }
   }
 }

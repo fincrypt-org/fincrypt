@@ -2,18 +2,17 @@
 /**
  * KDF Web Worker — keeps the 64 MiB Argon2id derivation off the main
  * thread. Messages:
- *   { type: 'derive', password: Uint8Array, salt: Uint8Array, params?: KdfParams }
- * -> { kek: Uint8Array }
- *   { type: 'done' } shuts the worker down (zeroizes nothing on the
- *   worker side; WASM memory is freed with the worker itself).
+ *   { type: 'derive', pass: string, salt: Uint8Array, params: KdfParams }
+ * -> { kek: Uint8Array } (32 raw bytes)
+ *   { error: string } on failure (content-free messages only)
  */
-import { deriveKek, validateKdfParams, type KdfParams } from './kdf'
+import { argon2idDerive, parseKdfParams } from './kdf'
 
 export interface KdfWorkerRequest {
   type: 'derive'
-  password: Uint8Array
+  pass: string
   salt: Uint8Array
-  params?: KdfParams
+  paramsJson: string
 }
 
 export interface KdfWorkerResponse {
@@ -21,16 +20,16 @@ export interface KdfWorkerResponse {
 }
 
 self.onmessage = async (event: MessageEvent<KdfWorkerRequest>) => {
-  const { type, password, salt, params } = event.data
+  const { type, pass, salt, paramsJson } = event.data
   if (type !== 'derive') return
   try {
-    const kek = await deriveKek(password, salt, params ? validateKdfParams(params) : undefined)
-    const response: KdfWorkerResponse = { kek }
-    ;(self as unknown as Worker).postMessage(response, [kek.buffer])
+    const params = parseKdfParams(paramsJson)
+    const kek = await argon2idDerive(pass, salt, params)
+    ;(self as unknown as Worker).postMessage({ kek }, [kek.buffer])
   } catch (err) {
-    // Serialize the error across the worker boundary.
+    // Content-free error only — no key material crosses the boundary.
     ;(self as unknown as Worker).postMessage({
-      error: err instanceof Error ? err.message : String(err),
+      error: err instanceof Error ? err.message : 'kdf worker error',
     })
   }
 }

@@ -73,15 +73,45 @@ You are the operator. The consequences are yours to weigh:
   Client wrapper: `web/src/crypto/opaque.ts` behind a `Transport`
   interface; wire messages are base64 OPAQUE protocol payloads plus the
   `userIdentifier` (lowercase email) — no password material, asserted by
-  a wire-inspection test (`opaque.test.ts`).
+  a wire-inspection test (`opaque.test.ts`). Full pin + quirks:
+  `web/src/crypto/OPAQUE-NOTES.md`.
 - **KDF: Argon2id** via hash-wasm (WASM), parameters in `users.kdf_params`
   (default m=64 MiB, t=3, p=4 — RFC 9106's second recommended profile).
-  Verified byte-identical to Go x/crypto and RustCrypto reference KATs.
+  The unit suite pins the committed RustCrypto reference KAT vectors
+  (`vectors/index.json`), cross-verified against Go `x/crypto/argon2`
+  during P1; hash-wasm's API cannot pass RFC 9106's `secret`+AD vector
+  (recorded in `kdf.test.ts` — the full vector is committed for
+  cross-implementation testing).
 - **AEAD: AES-256-GCM**, 12-byte random nonce, mandatory AAD
   `v1|user_id|record_type|record_id` (swapping ciphertexts between
-  records fails decryption — test-enforced).
-- **Subkeys: HKDF-SHA256** off the DEK, info = record type.
-- **Recovery: BIP39 12-word phrase** → Argon2id-derived recovery KEK.
+  records fails decryption — test-enforced; the decrypt-oracle rule:
+  all decrypt failures throw one generic `DecryptError`).
+- **Subkeys: HKDF-SHA256** off the DEK, info = bare record type,
+  salt = `fincrypt/v1/hkdf` (D1). The raw DEK never encrypts a record
+  (test-enforced: cross-type decrypt fails even with a matching AAD).
+- **Recovery: BIP39 12-word phrase** → seed (25th word pinned empty) →
+  HKDF-SHA256(seed, salt=`fincrypt/v1/hkdf`, info=`recovery`) → AES-256-GCM
+  recovery KEK (D4).
+
+## §P1-0 gap-fills and deltas (D1–D4)
+
+| # | Kind | Content |
+|---|---|---|
+| D1 | gap-fill | HKDF salt = `fincrypt/v1/hkdf` for all subkey derivations and the recovery KEK (§0 specifies info but not salt; WebCrypto HKDF requires one) |
+| D2 | deviation | Record types += `accounts`, `vault` (§1's tables store `encrypted_blob`; mechanism unchanged — info = bare record_type) |
+| D3 | gap-fill | Wrap AADs bind userId AND wrap-kind: `v1|<userId>|wrapped-dek` / `v1|<userId>|wrapped-dek-recovery` (prevents dek-wrap ↔ recovery-wrap replay; tested) |
+| D4 | gap-fill | Recovery KEK = BIP39 seed → HKDF-SHA256 (salt=`fincrypt/v1/hkdf`, info=`recovery`) → AES-256-GCM; BIP39 passphrase pinned empty in v1 |
+
+## Key-design decision: OPAQUE export_key is never a KEK
+
+The OPAQUE `export_key` is **never used as a KEK and never wraps the
+DEK**. The passphrase KEK is derived exclusively via
+`Argon2id(utf8(passphrase), kdf_salt, kdf_params)` — independent of any
+server-record-derived material, preserving §0's two-derivation
+structure. `exportKey` is returned by the wrapper for possible future
+use (e.g. device binding) but is not part of the v1 key hierarchy.
+(P1's first cut used it in an unlock path; that was reworked, not
+documented — see `OPAQUE-NOTES.md`.)
 
 ## Claims → tests (seeded; grows with the code)
 
@@ -93,8 +123,16 @@ You are the operator. The consequences are yours to weigh:
 | Request logs never contain bodies or cookies | Go test asserts log output lacks request body and cookie material | unit test (P0) |
 | Migration history is immutable | checksum ledger + tamper test | unit test (P0) |
 | No password material on the wire (OPAQUE) | wire-inspection test greps every transport message for password/encoded-password | unit test (P1) |
-| Wrong passphrase fails unwrap; KDF matches reference KATs | crypto tests vs Go/RustCrypto-verified Argon2id vectors | unit test (P1) |
+| Wrong passphrase fails unwrap; KDF matches reference KATs | crypto tests vs committed RustCrypto KAT fixtures (cross-verified vs Go) | unit test (P1) |
 | AAD mismatch fails decryption | crypto test: swapping ciphertexts between records must fail | unit test (P1) |
+| HKDF matches RFC 5869 | official cases 1–3 via committed fixtures | unit test (P1) |
+| BIP39 seeds match official mnemonics (empty passphrase) | committed official-vector fixtures | unit test (P1) |
+| Keys never persisted (I7) | eslint no-restricted-globals + CI grep + runtime storage-spy test | triple-enforced (P1) |
+| Raw DEK never encrypts a record (I4) | cross-type decrypt fails even with matching AAD | unit test (P1) |
+| Whole pipeline is byte-stable | frozen golden vectors re-verified on every run | unit test (P1) |
+| Crypto works in the real browser | /dev/crypto roundtrip in real Chromium (Playwright, in CI test-web) | e2e (P1) |
+| Public API surface frozen (I8) | export-set assertion on `index.ts` | unit test (P1) |
+| Lifecycle: no data re-encryption on passphrase change | pre-change envelope decrypts after change | unit test (P1) |
 
 ## What is deliberately NOT defended against (v1)
 

@@ -68,12 +68,13 @@ describe('opaque — OPAQUE (RFC 9807) client wrapper', () => {
     expect(() => canonicalUserIdentifier('not-an-email')).toThrow(/email/)
   })
 
-  it('exportKey can unlock the vault: OPAQUE export key wraps the DEK envelope (integration)', async () => {
-    // This is the P2 contract preview: the OPAQUE exportKey (client-only,
-    // stable across logins) can serve as KEK input. We prove stability and
-    // byte-length here; the full KEK wiring lands with P2 endpoints.
-    const { generateDek, wrapDekWithRecovery, unwrapDekWithRecovery } = await import('./vaultKey')
-    const { deriveRecoveryKek } = await import('./recovery')
+  it('exportKey is stable and 64 bytes but NEVER used as a KEK (key-design rule)', async () => {
+    // Design rule (OPAQUE-NOTES.md + THREAT_MODEL delta): the OPAQUE
+    // export_key is NOT a KEK and never wraps the DEK. The passphrase KEK
+    // is derived exclusively via Argon2id(passphrase, kdf_salt, params) —
+    // independent of server-record-derived material. This test pins the
+    // exportKey properties (stability, length) so any future use of it is
+    // a deliberate, THREAT_MODEL-delta'd decision.
     const server = new MockOpaqueServer()
     const reg = await register(server, 'user@example.com', PASSWORD)
     const session = await login(server, 'user@example.com', PASSWORD)
@@ -81,13 +82,6 @@ describe('opaque — OPAQUE (RFC 9807) client wrapper', () => {
     // exportKey is 64 bytes of key material (opaque-ke export_key, 512 bits)
     const exportBytes = fromB64(session?.exportKey ?? '')
     expect(exportBytes.length).toBe(64)
-
-    // Sanity: recovery KEK + DEK envelope still compose (independent path)
-    const phrase = (await import('./recovery')).generateRecoveryPhrase()
-    const recoveryKek = await deriveRecoveryKek(phrase)
-    const dek = generateDek()
-    const wrapped = await wrapDekWithRecovery(recoveryKek, dek)
-    expect([...(await unwrapDekWithRecovery(recoveryKek, wrapped))]).toEqual([...dek])
-    void reg
+    expect(session?.exportKey).toBe(reg.exportKey)
   })
 })

@@ -1,30 +1,43 @@
 /**
- * Recovery: 12-word BIP39 phrase (mandatory at signup, shown once).
+ * Recovery (C1.4): 12-word BIP39 phrase, mandatory at signup, shown once.
  *
- * The phrase maps to a 64-byte BIP39 seed; the recovery KEK is
- * Argon2id(seed-as-password, fixed app salt) — same KDF policy as the
- * passphrase KEK. The passphrase salt is server-stored per-user; the
- * recovery salt is a fixed domain label because the phrase itself
- * already carries ~128 bits of entropy (no salt uniqueness needed).
+ * D4 (gap-fill): the recovery KEK derivation — §0 names the recovery
+ * KEK without its derivation path. Pinned for v1:
+ *   mnemonic --BIP39 seed(passphrase pinned "")--> 64-byte seed
+ *   → HKDF-SHA256(seed, salt="fincrypt/v1/hkdf", info="recovery", 256)
+ *   → AES-256-GCM KEK.
+ * (The P1 first cut used Argon2id(seed, fixed label); the HKDF path is
+ * the specced D4 and cheaper — the phrase itself carries the entropy.)
  */
 import { mnemonicToSeedSync, validateMnemonic, generateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
+import {
+  hkdfBits,
+  hkdfSaltBytes,
+  wrapWithRecovery,
+  unwrapWithRecovery,
+  type RawKey,
+} from './keyHierarchy'
 import { importAesKey } from './aead'
-import { DEFAULT_KDF_PARAMS, deriveKek } from './kdf'
+import { CryptoError } from './errors'
 
-const RECOVERY_SALT_LABEL = 'fincrypt-recovery-kek-v1'
+const RECOVERY_INFO = 'recovery'
 
-/** generateRecoveryPhrase returns a fresh 12-word phrase (128-bit entropy). */
-export function generateRecoveryPhrase(): string {
-  return generateMnemonic(wordlist, 128)
+/** generateRecoveryPhrase returns 12 words + the normalized mnemonic string. */
+export function generateRecoveryPhrase(): { words: string[]; mnemonic: string } {
+  const mnemonic = generateMnemonic(wordlist, 128)
+  return { words: mnemonic.split(' '), mnemonic }
 }
 
-/** normalizePhrase lowercases and collapses whitespace so restore is forgiving about formatting. */
-export function normalizePhrase(phrase: string): string {
-  return phrase.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ')
+/**
+ * normalizePhrase: NFKD-normalize, lowercase, collapse whitespace —
+ * restore is forgiving about formatting but nothing else.
+ */
+export function normalizePhrase(input: string): string {
+  return input.normalize('NFKD').trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ')
 }
 
-/** validateRecoveryPhrase checks the words against the English wordlist + checksum. */
+/** validateRecoveryPhrase checks words against the English wordlist + checksum. */
 export function validateRecoveryPhrase(phrase: string): boolean {
   try {
     return validateMnemonic(normalizePhrase(phrase), wordlist)
@@ -34,16 +47,54 @@ export function validateRecoveryPhrase(phrase: string): boolean {
 }
 
 /**
- * deriveRecoveryKek turns the phrase into an AES-256-GCM KEK.
- * Throws when the phrase fails BIP39 validation (bad word or checksum).
+ * deriveRecoveryKek: BIP39 seed → HKDF → AES-256-GCM KEK (D4).
+ * Throws CryptoError('invalid_phrase') on a malformed phrase.
  */
-export async function deriveRecoveryKek(phrase: string): Promise<CryptoKey> {
-  const normalized = normalizePhrase(phrase)
+export async function deriveRecoveryKek(mnemonic: string): Promise<CryptoKey> {
+  const normalized = normalizePhrase(mnemonic)
   if (!validateRecoveryPhrase(normalized)) {
-    throw new Error('recovery: invalid recovery phrase (unknown word or bad checksum)')
+    throw new CryptoError('invalid_phrase', 'invalid recovery phrase')
   }
-  const seed = mnemonicToSeedSync(normalized)
-  const salt = new TextEncoder().encode(RECOVERY_SALT_LABEL)
-  const kekBytes = await deriveKek(seed.slice(0, 32), salt, DEFAULT_KDF_PARAMS)
-  return importAesKey(kekBytes)
+  const seed = mnemonicToSeedSync(normalized) // 25th word (BIP39 passphrase) pinned "" in v1
+  const bits = hkdfBits(seed, hkdfSaltBytes(), new TextEncoder().encode(RECOVERY_INFO), 256)
+  return importAesKey(bits)
+}
+
+/** wrapDekWithRecovery: DEK under the recovery KEK (60 bytes). */
+export async function wrapDekWithRecovery(
+  dek: RawKey,
+  mnemonic: string,
+  userId: string,
+): Promise<Uint8Array> {
+  const kek = await deriveRecoveryKek(mnemonic)
+  return wrapWithRecovery(dek, kek, userId)
+}
+
+/** recoverDek: open the recovery wrap with a fresh phrase → the original DEK. */
+export async function recoverDek(
+  wrappedRecovery: Uint8Array,
+  mnemonic: string,
+  userId: string,
+): Promise<RawKey> {
+  const kek = await deriveRecoveryKek(mnemonic)
+  return unwrapWithRecovery(wrappedRecovery, kek, userId)
+}
+
+/**
+ * pickConfirmIndices: 3 distinct indices of 0..11 for the
+ * retype-confirmation flow at signup. Injectable rng for tests.
+ * (rng returning a constant is a degenerate case — we shuffle a fixed
+ * list instead of rejection-sampling, so it always terminates.)
+ */
+export function pickConfirmIndices(rng: () => number = Math.random): [number, number, number] {
+  const indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  // Fisher–Yates with the injected rng
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    const capped = Math.min(Math.max(j, 0), i)
+    const tmp = indices[i] as number
+    indices[i] = indices[capped] as number
+    indices[capped] = tmp
+  }
+  return [indices[0] as number, indices[1] as number, indices[2] as number]
 }

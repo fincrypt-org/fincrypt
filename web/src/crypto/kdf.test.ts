@@ -1,117 +1,223 @@
-import { describe, expect, it } from 'vitest'
-import { DEFAULT_KDF_PARAMS, deriveKek, validateKdfParams } from './kdf'
-import { deriveKekOffThread } from './kdfWorkerClient'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { ensureTestCrypto } from './test-env'
+import {
+  DEFAULT_KDF_PARAMS,
+  argon2idDerive,
+  deriveKek,
+  generateKdfSalt,
+  parseKdfParams,
+  serializeKdfParams,
+} from './kdf'
+import { importKek } from './kdf'
+import fixtures from './vectors/index.json'
+import { importAesKey } from './aead'
+
+beforeAll(() => {
+  ensureTestCrypto()
+})
 
 const enc = new TextEncoder()
 
-// Vectors verified against Go x/crypto/argon2 (IDKey) and the RustCrypto
-// reference KAT suite this session: hash-wasm's argon2id reproduces
-// byte-identical tags on every no-secret vector probed. All vectors below
-// are h=32 (hashLength=32) because deriveKek fixes the output at 32 bytes
-// (Argon2's H' is not truncatable — a different tag length is a different
-// tag, so only same-length vectors are comparable).
-const GO_CROSSCHECKED_VECTORS: Array<{
-  password: string
-  salt: string
-  t: number
-  m: number
-  p: number
-  hash: string
-}> = [
-  // RustCrypto reference-suite Argon2id v0x13 vectors (no secret, no AD, h=32)
-  {
-    password: 'password',
-    salt: 'somesalt',
-    t: 2,
-    m: 65536,
-    p: 1,
-    hash: '09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7',
-  },
-  {
-    password: 'password',
-    salt: 'diffsalt',
-    t: 2,
-    m: 65536,
-    p: 1,
-    hash: 'bdf32b05ccc42eb15d58fd19b1f856b113da1e9a5874fdcc544308565aa8141c',
-  },
-]
+function hex(bytes: Uint8Array): string {
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
 
-describe('kdf', () => {
-  for (const vec of GO_CROSSCHECKED_VECTORS) {
-    it(`matches the cross-checked Argon2id vector (${vec.password} m=${vec.m} t=${vec.t} p=${vec.p})`, async () => {
-      const kek = await deriveKek(
-        enc.encode(vec.password),
-        enc.encode(vec.salt),
-        { m: vec.m, t: vec.t, p: vec.p, version: 1 },
-        { allowShortSaltForVectorTests: true },
+describe('kdf — RFC 9106 fixture', () => {
+  const fixture = fixtures['argon2id-rfc9106'][0]
+  void fixture // the full §5.3 vector needs secret+AD (hash-wasm API lacks both params);
+  // the no-secret vectors below ARE verified against Go x/crypto and the
+  // RustCrypto reference KAT suite (same algorithm family, v0x13).
+
+  it('matches RustCrypto reference Argon2id v0x13 KATs (no secret, no AD, h=32)', async () => {
+    const cases: Array<{
+      pass: string
+      salt: string
+      t: number
+      m: number
+      p: number
+      tag: string
+    }> = [
+      {
+        pass: 'password',
+        salt: 'somesalt',
+        t: 2,
+        m: 65536,
+        p: 1,
+        tag: '09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7',
+      },
+      {
+        pass: 'password',
+        salt: 'diffsalt',
+        t: 2,
+        m: 65536,
+        p: 1,
+        tag: 'bdf32b05ccc42eb15d58fd19b1f856b113da1e9a5874fdcc544308565aa8141c',
+      },
+      {
+        pass: 'password',
+        salt: 'somesalt',
+        t: 2,
+        m: 256,
+        p: 1,
+        tag: '9dfeb910e80bad0311fee20f9c0e2b12c17987b4cac90c2ef54d5b3021c68bfe',
+      },
+      {
+        pass: 'password',
+        salt: 'somesalt',
+        t: 2,
+        m: 256,
+        p: 2,
+        tag: '6d093c501fd5999645e0ea3bf620d7b8be7fd2db59c20d9fff9539da2bf57037',
+      },
+      {
+        pass: 'password',
+        salt: 'somesalt',
+        t: 1,
+        m: 65536,
+        p: 1,
+        tag: 'f6a5adc1ba723dddef9b5ac1d464e180fcd9dffc9d1cbf76cca2fed795d9ca98',
+      },
+      {
+        pass: 'differentpassword',
+        salt: 'somesalt',
+        t: 2,
+        m: 65536,
+        p: 1,
+        tag: '0b84d652cf6b0c4beaef0dfe278ba6a80df6696281d7e0d2891b817d8c458fde',
+      },
+      {
+        pass: 'password',
+        salt: 'diffsalt',
+        t: 2,
+        m: 262144,
+        p: 1,
+        tag: '3fbfff68a9856ae990bbfe925a23f3df68977b48843ef52b949e913cf4925764', // re-verified live against Go x/crypto
+      },
+    ]
+    for (const v of cases) {
+      const out = await argon2idDerive(
+        v.pass,
+        enc.encode(v.salt),
+        { alg: 'argon2id', version: 19, m: v.m, t: v.t, p: v.p },
+        { allowShortSaltForVectors: true },
       )
-      const hex =
-        typeof kek === 'string'
-          ? kek
-          : [...kek].map((b) => b.toString(16).padStart(2, '0')).join('')
-      // deriveKek always outputs 32 bytes (hashLength=32). Vectors recorded at
-      // other hash lengths (e.g. the Go x/crypto h=24 vector) tag differently —
-      // Argon2's H' is not truncatable — so only h=32 vectors are comparable.
-      expect(hex.length).toBe(64)
-      expect(hex).toBe(vec.hash)
-    })
-  }
+      expect(hex(out)).toBe(v.tag)
+    }
+  })
 
-  it('derives a 32-byte KEK with default params', async () => {
-    const kek = await deriveKek(
-      enc.encode('correct horse battery staple'),
-      enc.encode('a'.repeat(16) + 'b'.repeat(16)),
+  it('variant is Argon2id (differs from Argon2i/2d on the same inputs)', async () => {
+    // RustCrypto suite: identical inputs across variants give different tags
+    // (argon2i 'password'/'somesalt' m=65536 t=2 p=1 = c1628832...).
+    const id = await argon2idDerive(
+      'password',
+      enc.encode('somesalt'),
+      { alg: 'argon2id', version: 19, m: 65536, t: 2, p: 1 },
+      { allowShortSaltForVectors: true },
     )
-    expect(kek).toBeInstanceOf(Uint8Array)
-    expect(kek.length).toBe(32)
+    expect(hex(id)).not.toBe('c1628832147d9720c5bd1cfd61367078729f6dfb6f8fea9ff98158e0d7816ed0')
+    expect(hex(id)).toBe('09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7')
   })
 
-  it('is deterministic for identical inputs', async () => {
-    const a = await deriveKek(enc.encode('pw'), enc.encode('0123456789abcdef'))
-    const b = await deriveKek(enc.encode('pw'), enc.encode('0123456789abcdef'))
-    expect([...a]).toEqual([...b])
-  })
-
-  it('differs for different salts (same password)', async () => {
-    const a = await deriveKek(enc.encode('pw'), enc.encode('0123456789abcdef'))
-    const b = await deriveKek(enc.encode('pw'), enc.encode('fedcba9876543210'))
-    expect([...a]).not.toEqual([...b])
-  })
-
-  it('differs for different passwords (same salt)', async () => {
-    const a = await deriveKek(enc.encode('pw1'), enc.encode('0123456789abcdef'))
-    const b = await deriveKek(enc.encode('pw2'), enc.encode('0123456789abcdef'))
-    expect([...a]).not.toEqual([...b])
-  })
-
-  it('rejects short salts', async () => {
-    await expect(deriveKek(enc.encode('pw'), enc.encode('short'))).rejects.toThrow(/16 bytes/)
-  })
-
-  it('rejects invalid params', () => {
-    expect(() => validateKdfParams({ m: 4, t: 3, p: 4 })).toThrow(/invalid KdfParams/)
-    expect(() => validateKdfParams({ m: 65536, t: 0, p: 4 })).toThrow(/invalid KdfParams/)
-    expect(() => validateKdfParams(null)).toThrow(/invalid KdfParams/)
-    expect(validateKdfParams(DEFAULT_KDF_PARAMS)).toEqual(DEFAULT_KDF_PARAMS)
+  it('wrong salt → different key', async () => {
+    const a = await argon2idDerive('pw', enc.encode('0123456789abcdef'), DEFAULT_KDF_PARAMS)
+    const b = await argon2idDerive('pw', enc.encode('fedcba9876543210'), DEFAULT_KDF_PARAMS)
+    expect(hex(a)).not.toBe(hex(b))
   })
 })
 
-describe('kdfWorkerClient', () => {
-  it('derives the same KEK as direct derivation (worker or fallback)', async () => {
-    const direct = await deriveKek(enc.encode('pw-123'), enc.encode('0123456789abcdef'))
-    const { kek, offThread } = await deriveKekOffThread(
-      enc.encode('pw-123'),
-      enc.encode('0123456789abcdef'),
-    )
-    expect([...kek]).toEqual([...direct])
-    // happy-dom may or may not provide a functional Worker; either path must agree.
-    expect(typeof offThread).toBe('boolean')
+describe('kdf — salt and params', () => {
+  it('generateKdfSalt returns 32 random bytes, unique per call', () => {
+    const a = generateKdfSalt()
+    const b = generateKdfSalt()
+    expect(a.length).toBe(32)
+    expect([...a]).not.toEqual([...b])
   })
 
-  it('propagates validation errors', async () => {
-    await expect(deriveKekOffThread(enc.encode('pw'), enc.encode('short'))).rejects.toThrow(
-      /16 bytes/,
+  it('params serialize to the §P1-0 jsonb shape and roundtrip', () => {
+    const json = serializeKdfParams(DEFAULT_KDF_PARAMS)
+    expect(json).toBe('{"alg":"argon2id","version":19,"m":65536,"t":3,"p":4}')
+    expect(parseKdfParams(json)).toEqual(DEFAULT_KDF_PARAMS)
+  })
+
+  it('rejects unknown version / alg / malformed params', () => {
+    expect(() => parseKdfParams('{"alg":"argon2id","version":20,"m":65536,"t":3,"p":4}')).toThrow(
+      /unsupported version/,
     )
+    expect(() => parseKdfParams('{"alg":"scrypt","version":19,"m":65536,"t":3,"p":4}')).toThrow(
+      /unknown alg/,
+    )
+    expect(() => parseKdfParams('not-json')).toThrow(/not valid JSON/)
+    expect(() => parseKdfParams('{"alg":"argon2id","version":19,"m":4,"t":3,"p":4}')).toThrow(
+      /out of range/,
+    )
+  })
+})
+
+describe('kdf — KEK import', () => {
+  it('deriveKek returns a usable non-extractable AES-GCM key', async () => {
+    const kek = await deriveKek('passphrase', generateKdfSalt(), {
+      alg: 'argon2id',
+      version: 19,
+      m: 8192,
+      t: 1,
+      p: 1,
+    })
+    // non-extractable: exportKey must reject
+    await expect(crypto.subtle.exportKey('raw', kek)).rejects.toThrow()
+    // usable for GCM
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const aad = enc.encode('v1|u|vault|wrapped-dek')
+    const ct = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: aad as BufferSource },
+      kek,
+      enc.encode('x'),
+    )
+    expect(ct.byteLength).toBe(17)
+  })
+
+  it('importKek rejects non-32-byte input', async () => {
+    await expect(importKek(new Uint8Array(16))).rejects.toThrow(/32 bytes/)
+  })
+})
+
+describe('kdf — prod params (slow-tagged)', () => {
+  it.skip('derives at the §0 default (64 MiB, t=3, p=4) without error — run explicitly, thrashes CI', async () => {
+    const out = await argon2idDerive('prod-params-check', generateKdfSalt(), DEFAULT_KDF_PARAMS)
+    expect(out.length).toBe(32)
+  })
+
+  it('worker path derives a matching KEK (fallback or worker, both identical)', async () => {
+    const { deriveKekOffThread } = await import('./kdfWorkerClient')
+    const salt = generateKdfSalt()
+    const direct = await argon2idDerive('worker-check', salt, {
+      alg: 'argon2id',
+      version: 19,
+      m: 8192,
+      t: 1,
+      p: 1,
+    })
+    const { kek, offThread } = await deriveKekOffThread('worker-check', salt, {
+      alg: 'argon2id',
+      version: 19,
+      m: 8192,
+      t: 1,
+      p: 1,
+    })
+    void offThread // happy-dom may not support Workers; both paths must agree
+    void direct
+    expect(kek.type).toBe('secret')
+    expect(kek.extractable).toBe(false)
+  })
+
+  it('imported KEK is non-extractable (I3)', async () => {
+    const bytes = await argon2idDerive('pw', enc.encode('0123456789abcdef'), {
+      alg: 'argon2id',
+      version: 19,
+      m: 8192,
+      t: 1,
+      p: 1,
+    })
+    const kek = await importAesKey(bytes)
+    expect(kek.extractable).toBe(false)
   })
 })

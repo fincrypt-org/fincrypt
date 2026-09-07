@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "generated": "2026-09-07",
+    "note": "FROZEN golden vectors. Inputs fixed; regenerate only with a THREAT_MODEL delta."
+  },
+  "user_id": "golden-user@fincrypt.test",
+  "kdf_salt_b64": "WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo=",
+  "kdf_params_json": "{\"alg\":\"argon2id\",\"version\":19,\"m\":8192,\"t\":1,\"p\":1}",
+  "passphrase": "golden-passphrase-v1",
+  "dek_b64": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw=",
+  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "wrapped_dek_b64": "M/gGG0nHO9F931Lbi3m2EhOcFF3dMOa82weTzdPmVry9xdEEaDPUyjBOPikMJfDVLRvMkQGYQcQUy+Xz",
+  "wrapped_dek_recovery_b64": "mCGjZ2QZiR3ZCTktQb/NcyuErmHZ4YbsoJN5hKLb9jroNGvgJzQ/25B5sQVIRv4qX6LlHtcKO1ts9Os+",
+  "envelopes": [
+    {
+      "type": "transactions",
+      "record_id": "golden-tx-1",
+      "plaintext": "PAYMENT|Grocery Mart|-42.50|EUR",
+      "envelope_json": "{\"record_id\":\"golden-tx-1\",\"type\":\"transactions\",\"nonce\":\"Z29sZGVuLXR4MQAA\",\"ciphertext\":\"UpF0raIzs66avFyP/eocbfZe4TDsVVe3dZcXmMJNlXkyDWQPj+zPgqD7lafjMO0=\",\"aad\":\"v1|golden-user@fincrypt.test|transactions|golden-tx-1\",\"ts\":\"2026-09-07T00:00:00Z\"}"
+    },
+    {
+      "type": "chat",
+      "record_id": "golden-chat-1",
+      "plaintext": "what did I spend this month?",
+      "envelope_json": "{\"record_id\":\"golden-chat-1\",\"type\":\"chat\",\"nonce\":\"Z29sZGVuLWNoYXQx\",\"ciphertext\":\"MSZ+s9prLh/5UcjaDH6xOO5b+3a7n+4QTBgGO7oY1IhgTwSpIQXXOiMnHHg=\",\"aad\":\"v1|golden-user@fincrypt.test|chat|golden-chat-1\",\"ts\":\"2026-09-07T00:00:00Z\"}"
+    }
+  ]
+}

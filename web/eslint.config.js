@@ -47,4 +47,27 @@ export default [
       globals: { process: 'readonly' },
     },
   },
+  {
+    // I7 storage ban: no key material may ever touch persistence APIs
+    // in the crypto core or the session keystore.
+    files: ['src/crypto/**/*.ts', 'src/stores/**/*.ts'],
+    ignores: ['src/crypto/**/*.test.ts', 'src/stores/**/*.test.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'localStorage', message: 'I7: keys are never persisted (see API.md)' },
+        { name: 'sessionStorage', message: 'I7: keys are never persisted (see sessionKeys.ts)' },
+        { name: 'indexedDB', message: 'I7: keys are never persisted (see sessionKeys.ts)' },
+        { name: 'caches', message: 'I7: keys are never persisted' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'document',
+          property: 'cookie',
+          message: 'I7: keys are never persisted in cookies',
+        },
+      ],
+    },
+  },
 ]
