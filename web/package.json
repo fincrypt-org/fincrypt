@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
-    "@scure/bip39": "^2.0.1",
+    "@scure/bip39": "^2.4.0",
     "@serenity-kit/opaque": "^1.1.0",
     "@tanstack/react-virtual": "^3.14.12",
     "dexie": "^4.4.6",
