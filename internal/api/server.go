@@ -47,7 +47,13 @@ func NewServerWithPinger(cfg config.Config, pool Pinger, logger *slog.Logger) *S
 // NewServerWithAuth is the test seam for handler tests: an explicit
 // auth service (may be a wrapper with a stub pool), no Pinger coupling.
 func NewServerWithAuth(cfg config.Config, authSvc *auth.Service, logger *slog.Logger) *Server {
-	s := &Server{cfg: cfg, logger: logger}
+	return NewServerWithAuthPool(cfg, nil, authSvc, logger)
+}
+
+// NewServerWithAuthPool is the seam for tests that need pool-backed
+// handlers (sync/vault) with a hand-built auth service.
+func NewServerWithAuthPool(cfg config.Config, pool Pinger, authSvc *auth.Service, logger *slog.Logger) *Server {
+	s := &Server{cfg: cfg, pool: pool, logger: logger}
 	s.mount(authSvc)
 	return s
 }
@@ -67,6 +73,8 @@ func (s *Server) mount(authSvc *auth.Service) {
 	mux.HandleFunc("GET /readyz", s.handleReady)
 	if authSvc != nil {
 		s.registerAuthRoutes(mux)
+		s.registerSyncRoutes(mux)
+		s.registerVaultRoutes(mux)
 	}
 
 	var h http.Handler = mux
