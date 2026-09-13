@@ -28,6 +28,10 @@ services:
       DATABASE_URL: postgres://fincrypt:fincrypt@postgres:5432/fincrypt?sslmode=disable
       # dev key placeholder for compose smoke only; prod injects real secrets
       SESSION_KEYS: ${SESSION_KEYS:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
+      # Compose smoke only: a throwaway OPAQUE setup so config.Load passes
+      # and 001 applies. Prod generates its own with `server --gen-setup`
+      # and keeps it persistent (see docs/OPAQUE-INTEROP.md).
+      OPAQUE_SERVER_SETUP: ${OPAQUE_SERVER_SETUP:-OPXI0lEsAH5QzK4NQRzp8ZBpCd0Y+kg77ZaUNT6unJEyHmnlobDxAN7iorxqoOARUaicCC4vVmRAUK6bStoLmcPQA/lG2XjDKEyYxzcntaS+0VAsR4o31dmEKzTD4AwOUtiL87ns2pDt4jbWfOoYj0QxlDbFotrheaArQ5cORD0=}
     ports:
       - "8080:8080"
     depends_on:
