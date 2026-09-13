@@ -100,9 +100,13 @@ func createTestUser(t *testing.T, s *Server, pool *pgxpool.Pool, email string) t
 func authedRequest(t *testing.T, s *Server, token, method, path string, body any) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	var req *http.Request
-	if body != nil {
-		raw, _ := json.Marshal(body)
+	if raw, ok := body.([]byte); ok {
+		// raw byte bodies pass through verbatim (attachment uploads)
 		req = httptest.NewRequestWithContext(t.Context(), method, path, bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/octet-stream")
+	} else if body != nil {
+		mraw, _ := json.Marshal(body)
+		req = httptest.NewRequestWithContext(t.Context(), method, path, bytes.NewReader(mraw))
 		req.Header.Set("Content-Type", "application/json")
 	} else {
 		req = httptest.NewRequestWithContext(t.Context(), method, path, nil)

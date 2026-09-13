@@ -163,6 +163,18 @@ func (s *Server) enforceMutationCSRF(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// enforceOriginOnly is enforceMutationCSRF without the JSON-body rule,
+// for the raw-byte attachment endpoint (Origin check still applies).
+func (s *Server) enforceOriginOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.originAllowedForHost(r, r.Header.Get("Origin")) {
+			s.writeError(w, http.StatusForbidden, "csrf", "origin not allowed")
+			return
+		}
+		next(w, r)
+	}
+}
+
 // ─── rate limits (D8) ────────────────────────────────────────────────
 
 // rateTable implements the §P2-0 buckets: per-IP for auth, per-user for

@@ -75,6 +75,7 @@ func (s *Server) mount(authSvc *auth.Service) {
 		s.registerAuthRoutes(mux)
 		s.registerSyncRoutes(mux)
 		s.registerVaultRoutes(mux)
+		s.registerAttachmentRoutes(mux)
 	}
 
 	var h http.Handler = mux
