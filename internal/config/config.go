@@ -32,6 +32,10 @@ type Config struct {
 	DevOrigin string
 	// SessionKeys holds 1–2 decoded 32-byte cookie-signing secrets.
 	SessionKeys SessionKeys
+	// OpaqueServerSetup is the persistent OPAQUE ServerSetup
+	// (128 B raw, base64; see docs/OPAQUE-INTEROP.md). Required from P2
+	// on; regenerating it invalidates every stored user record.
+	OpaqueServerSetup string
 }
 
 // getenv returns the value of key, or "" when unset/blank.
@@ -79,6 +83,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.SessionKeys = keys
+
+	cfg.OpaqueServerSetup = getenv("OPAQUE_SERVER_SETUP")
+	if cfg.OpaqueServerSetup == "" {
+		return Config{}, fmt.Errorf("config: OPAQUE_SERVER_SETUP is required from P2 (base64 of the 128-byte OPAQUE ServerSetup; regenerate only with the explicit invalidation warning in docs/OPAQUE-INTEROP.md)")
+	}
 
 	if origin := cfg.DevOrigin; origin != "" {
 		if cfg.Env == "prod" {
