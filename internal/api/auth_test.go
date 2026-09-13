@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/fincrypt-org/fincrypt/internal/auth"
+	"github.com/fincrypt-org/fincrypt/internal/config"
 )
 
 func setupHandlerEnv(t *testing.T) (*Server, *driver) {
@@ -71,7 +72,7 @@ func setupHandlerEnv(t *testing.T) (*Server, *driver) {
 	// packages run in parallel the schema may be mid-recreate. Wait for
 	// a stable users table before any handler flow.
 	waitForUsersTable(t, pool)
-	s := NewServerWithAuth(testConfig(), svc, testAPILogger())
+	s := NewServerWithAuth(authTestConfig(), svc, testAPILogger())
 	return s, d
 }
 
@@ -100,6 +101,7 @@ func postJSON(t *testing.T, s *Server, path string, body any) (*httptest.Respons
 	}
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, strings.NewReader(string(raw)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", testOrigin)
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, req)
 	var resp map[string]any
@@ -289,6 +291,7 @@ func TestHandlersMalformedBodies(t *testing.T) {
 	for _, tc := range cases {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tc.path, strings.NewReader(tc.body))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", testOrigin)
 		rec := httptest.NewRecorder()
 		s.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -359,6 +362,18 @@ func drainTestLogs(t *testing.T) []string {
 	t.Helper()
 	return testLogBuffer(t)
 }
+
+// authTestConfig is the dev config with the origin allowlist the CSRF
+// checks require (health_test.go's testConfig has no DevOrigin).
+func authTestConfig() config.Config {
+	c := testConfig()
+	c.DevOrigin = testOrigin
+	c.SessionKeys = [][]byte{make([]byte, 32), make([]byte, 32)}
+	return c
+}
+
+// testOrigin is the allowed dev origin for handler tests.
+const testOrigin = "http://localhost:5173"
 
 // toURL converts a std-b64 payload from the Go server to serenity's
 // url-no-pad alphabet for the driver.

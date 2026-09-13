@@ -24,6 +24,8 @@ type Server struct {
 	logger  *slog.Logger
 	handler http.Handler
 	auth    *auth.Service
+	rates   *rateTable
+	auditQ  auditQuerier
 }
 
 // NewServer builds the full middleware chain and mounts routes.
@@ -45,7 +47,13 @@ func NewServerWithPinger(cfg config.Config, pool Pinger, logger *slog.Logger) *S
 // NewServerWithAuth is the test seam for handler tests: an explicit
 // auth service (may be a wrapper with a stub pool), no Pinger coupling.
 func NewServerWithAuth(cfg config.Config, authSvc *auth.Service, logger *slog.Logger) *Server {
-	s := &Server{cfg: cfg, logger: logger}
+	return NewServerWithAuthPool(cfg, nil, authSvc, logger)
+}
+
+// NewServerWithAuthPool is the seam for tests that need pool-backed
+// handlers (sync/vault) with a hand-built auth service.
+func NewServerWithAuthPool(cfg config.Config, pool Pinger, authSvc *auth.Service, logger *slog.Logger) *Server {
+	s := &Server{cfg: cfg, pool: pool, logger: logger}
 	s.mount(authSvc)
 	return s
 }
@@ -54,11 +62,19 @@ func NewServerWithAuth(cfg config.Config, authSvc *auth.Service, logger *slog.Lo
 // (possibly nil, in P0-health tests) auth service.
 func (s *Server) mount(authSvc *auth.Service) {
 	s.auth = authSvc
+	s.rates = newRateTable()
+	if ap, ok := poolOf(s.pool); ok {
+		s.auditQ = newAuditWriter(ap)
+	} else {
+		s.auditQ = noopAudit{}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /readyz", s.handleReady)
 	if authSvc != nil {
 		s.registerAuthRoutes(mux)
+		s.registerSyncRoutes(mux)
+		s.registerVaultRoutes(mux)
 	}
 
 	var h http.Handler = mux
@@ -68,6 +84,13 @@ func (s *Server) mount(authSvc *auth.Service) {
 	h = s.requestLogger(h)
 	h = s.requestID(h)
 	s.handler = h
+}
+
+// poolOf narrows the Pinger seam back to the concrete pool when one is
+// present (audit writes need it).
+func poolOf(p Pinger) (*pgxpool.Pool, bool) {
+	pool, ok := p.(*pgxpool.Pool)
+	return pool, ok && pool != nil
 }
 
 // newAuthService wires the auth service; nil-safe for health tests that
