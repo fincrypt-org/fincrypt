@@ -378,6 +378,34 @@ func (s *Service) LoginFinish(ctx context.Context, b LoginFinishBody) (*LoginFin
 	}, nil
 }
 
+// MeResponse is GET /api/auth/me (§P2-0 Session row).
+type MeResponse struct {
+	UserID    string          `json:"userId"`
+	Email     string          `json:"email"`
+	KdfSalt   string          `json:"kdfSalt"`
+	KdfParams json.RawMessage `json:"kdfParams"`
+}
+
+// Me returns the session user's identity and KDF material.
+func (s *Service) Me(ctx context.Context, userID string) (*MeResponse, error) {
+	row := &userRow{}
+	err := s.pool.QueryRow(ctx,
+		`select id::text, email::text, kdf_salt, kdf_params from users where id = $1`, userID,
+	).Scan(&row.ID, &row.Email, &row.KdfSalt, &row.KdfParams)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUnknownUser
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: me lookup: %w", err)
+	}
+	return &MeResponse{
+		UserID:    row.ID,
+		Email:     row.Email,
+		KdfSalt:   base64.StdEncoding.EncodeToString(row.KdfSalt),
+		KdfParams: row.KdfParams,
+	}, nil
+}
+
 // lookupUser fetches by citext email; unknown ⇒ ErrUnknownUser.
 func (s *Service) lookupUser(ctx context.Context, email string) (*userRow, error) {
 	row := &userRow{}

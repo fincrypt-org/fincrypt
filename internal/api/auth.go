@@ -1,8 +1,10 @@
 package api
 
-// Auth HTTP handlers (C2.1). Thin door over internal/auth.Service:
-// decode JSON, call the service, map sentinel errors to §P2-0 codes.
-// Body-never-logged (J5) applies from this first handler on.
+// Auth HTTP handlers (C2.1) + session issuance (C2.2). Thin door over
+// internal/auth.Service: decode JSON, call the service, map sentinel
+// errors to §P2-0 codes. Every mutation goes through CSRF enforcement
+// and the per-IP auth rate bucket; register/login/logout are audited
+// (J5: schema fields only, never bodies/cookies/ciphertext).
 
 import (
 	"encoding/json"
@@ -30,12 +32,25 @@ func (s *Server) writeError(w http.ResponseWriter, status int, code, message str
 	writeJSON(w, status, e)
 }
 
-// registerRoutes mounts the auth endpoints on the mux.
+// registerAuthRoutes mounts the auth endpoints on the mux.
 func (s *Server) registerAuthRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/auth/register/start", s.handleRegisterStart)
-	mux.HandleFunc("POST /api/auth/register/finish", s.handleRegisterFinish)
-	mux.HandleFunc("POST /api/auth/login/start", s.handleLoginStart)
-	mux.HandleFunc("POST /api/auth/login/finish", s.handleLoginFinish)
+	mux.HandleFunc("POST /api/auth/register/start", s.guardedAuth(s.handleRegisterStart))
+	mux.HandleFunc("POST /api/auth/register/finish", s.guardedAuth(s.handleRegisterFinish))
+	mux.HandleFunc("POST /api/auth/login/start", s.guardedAuth(s.handleLoginStart))
+	mux.HandleFunc("POST /api/auth/login/finish", s.guardedAuth(s.handleLoginFinish))
+	mux.HandleFunc("GET /api/auth/me", s.requireSession(s.handleMe))
+	mux.HandleFunc("POST /api/auth/logout", s.requireSession(s.handleLogout))
+}
+
+// guardedAuth chains CSRF + auth rate limit for the four OPAQUE steps.
+func (s *Server) guardedAuth(next http.HandlerFunc) http.HandlerFunc {
+	return s.enforceMutationCSRF(func(w http.ResponseWriter, r *http.Request) {
+		if !s.rates.allowAuth(clientIP(r)) {
+			s.reject429(w)
+			return
+		}
+		next(w, r)
+	})
 }
 
 func (s *Server) handleRegisterStart(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +81,7 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := s.auth.RegisterFinish(r.Context(), body)
 	if errors.Is(err, auth.ErrEmailTaken) {
+		s.audit(r.Context(), "register", "", clientIP(r), r.UserAgent())
 		s.writeError(w, http.StatusConflict, "email_taken", "email already registered")
 		return
 	}
@@ -74,7 +90,8 @@ func (s *Server) handleRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "invalid_request", "registration failed")
 		return
 	}
-	// Session cookie issuance lands with C2.2 (session middleware).
+	s.issueSession(w, userID)
+	s.audit(r.Context(), "register", userID, clientIP(r), r.UserAgent())
 	writeJSON(w, http.StatusCreated, map[string]string{"userId": userID})
 }
 
@@ -110,7 +127,9 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	})
 	if errors.Is(err, auth.ErrInvalidCredentials) || errors.Is(err, auth.ErrUnknownUser) ||
 		errors.Is(err, auth.ErrNoPendingLogin) {
-		// Uniform 401 — no existence oracle (D8).
+		// Uniform 401 — no existence oracle (D8). Audited as login-fail
+		// with no user id (the id is unknowable on unknown emails).
+		s.audit(r.Context(), "login_fail", "", clientIP(r), r.UserAgent())
 		s.writeError(w, http.StatusUnauthorized, "auth_failed", "authentication failed")
 		return
 	}
@@ -119,7 +138,29 @@ func (s *Server) handleLoginFinish(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
+	s.issueSession(w, resp.UserID)
+	s.audit(r.Context(), "login", resp.UserID, clientIP(r), r.UserAgent())
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleMe returns the session user's identity + unlock material echo
+// (§P2-0 Session row).
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	userID, _ := userIDFromContext(r.Context())
+	row, err := s.auth.Me(r.Context(), userID)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, row)
+}
+
+// handleLogout clears the cookie (D6 stateless).
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	userID, _ := userIDFromContext(r.Context())
+	clearSession(w)
+	s.audit(r.Context(), "logout", userID, clientIP(r), r.UserAgent())
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // readBody decodes a JSON body with a 1 MiB cap. Returns false (and has
