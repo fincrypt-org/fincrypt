@@ -19,12 +19,26 @@ func genKey(t *testing.T) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+
+// genSetup returns a syntactically valid (128-byte) OPAQUE ServerSetup
+// as base64. Config only checks shape here; crypto validity is the
+// auth package's concern (its tests use the real generator).
+func genSetup(t *testing.T) string {
+	t.Helper()
+	b := make([]byte, 128)
+	if _, err := rand.Read(b); err != nil {
+		t.Fatalf("rand: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 func TestLoadHappyPath(t *testing.T) {
 	t.Setenv("ENV", "dev")
 	t.Setenv("PORT", "9000")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db?sslmode=disable")
 	t.Setenv("SESSION_KEYS", genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 	t.Setenv("DEV_ORIGIN", "http://localhost:5173")
 
 	cfg, err := Load()
@@ -45,6 +59,7 @@ func TestLoadHappyPath(t *testing.T) {
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
 	t.Setenv("SESSION_KEYS", genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 
 	cfg, err := Load()
 	if err != nil {
@@ -72,6 +87,7 @@ func unsetenv(t *testing.T, key string) {
 
 func TestLoadMissingDatabaseURL(t *testing.T) {
 	t.Setenv("SESSION_KEYS", genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 	unsetenv(t, "DATABASE_URL")
 
 	_, err := Load()
@@ -103,6 +119,7 @@ func TestLoadShortSessionKey(t *testing.T) {
 func TestLoadTwoSessionKeys(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
 	t.Setenv("SESSION_KEYS", genKey(t)+","+genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 
 	cfg, err := Load()
 	if err != nil {
@@ -137,6 +154,7 @@ func TestLoadDevOriginDisallowedInProd(t *testing.T) {
 	t.Setenv("ENV", "prod")
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
 	t.Setenv("SESSION_KEYS", genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 	t.Setenv("DEV_ORIGIN", "http://localhost:5173")
 
 	_, err := Load()
@@ -149,6 +167,7 @@ func TestLoadInvalidEnv(t *testing.T) {
 	t.Setenv("ENV", "staging")
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost:5432/db")
 	t.Setenv("SESSION_KEYS", genKey(t))
+	t.Setenv("OPAQUE_SERVER_SETUP", genSetup(t))
 
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "ENV") {
@@ -174,7 +193,7 @@ func TestEnvExampleParses(t *testing.T) {
 			t.Fatalf(".env.example line not KEY=VALUE: %q", line)
 		}
 		switch key {
-		case "SESSION_KEYS", "DATABASE_URL":
+		case "SESSION_KEYS", "DATABASE_URL", "OPAQUE_SERVER_SETUP":
 			// placeholders are intentionally short — only check the key shape
 			t.Setenv(key, genKey(t))
 		default:

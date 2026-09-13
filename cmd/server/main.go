@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,18 +15,30 @@ import (
 	"time"
 
 	"github.com/fincrypt-org/fincrypt/internal/api"
+	"github.com/fincrypt-org/fincrypt/internal/auth"
 	"github.com/fincrypt-org/fincrypt/internal/config"
 	"github.com/fincrypt-org/fincrypt/internal/db"
 )
 
 func main() {
 	migrateOnly := flag.Bool("migrate-only", false, "apply pending migrations and exit (make migrate)")
+	genSetup := flag.Bool("gen-setup", false, "generate a fresh OPAQUE ServerSetup, print it as base64, and exit (persist as OPAQUE_SERVER_SETUP; regenerate only with the invalidation warning in docs/OPAQUE-INTEROP.md)")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel(os.Getenv("LOG_LEVEL")),
 	}))
 	slog.SetDefault(logger)
+
+	if *genSetup {
+		setup, err := auth.GenerateServerSetup()
+		if err != nil {
+			logger.Error("gen-setup", "error", err)
+			os.Exit(1)
+		}
+		fmt.Println(setup)
+		return
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
