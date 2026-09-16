@@ -238,6 +238,12 @@ jobs:
           fi
           echo "no-plaintext canary green"
       - name: run real e2e against the compose stack
+        # ENV=dev + DEV_ORIGIN allowlists the Vite proxy origin (same
+        # topology as local dev); the prod same-origin branch stays
+        # untouched and is covered by session_test.go's origin matrix.
+        env:
+          APP_ENV: dev
+          APP_DEV_ORIGIN: http://localhost:5173
         run: |
           cd web
           npm ci

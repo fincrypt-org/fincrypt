@@ -22,9 +22,10 @@ services:
   app:
     build: .
     environment:
-      ENV: prod
+      ENV: ${APP_ENV:-prod}
       PORT: "8080"
       LOG_LEVEL: info
+      DEV_ORIGIN: ${APP_DEV_ORIGIN:-}
       DATABASE_URL: postgres://fincrypt:fincrypt@postgres:5432/fincrypt?sslmode=disable
       # dev key placeholder for compose smoke only; prod injects real secrets
       SESSION_KEYS: ${SESSION_KEYS:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm}
