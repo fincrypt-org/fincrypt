@@ -151,7 +151,9 @@ func allowedKDFParams(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return errors.New("kdf_params: not an object")
 	}
-	if p.Alg != "argon2id" || p.M != 65536 || p.T != 3 || p.P != 4 || p.Version != 1 {
+	// Version = Argon2's algorithm version (0x13 = 19), the only value
+	// P1's kdf.ts emits; the D7 guard pins the whole profile.
+	if p.Alg != "argon2id" || p.M != 65536 || p.T != 3 || p.P != 4 || p.Version != 19 {
 		return errors.New("kdf_params outside the allowed set (D7)")
 	}
 	return nil
