@@ -254,6 +254,9 @@ jobs:
           # compose app under test)
           npx playwright test e2e/auth.spec.ts e2e/isolation.spec.ts e2e/sync.spec.ts \
             --project=chromium --workers=2 --reporter=line
+      - name: dump app logs (diagnose e2e failures)
+        if: failure()
+        run: docker compose -f docker-compose.yml logs app | tail -60
       - name: dump and grep the post-e2e DB for fixture plaintext
         run: |
           set -euo pipefail
