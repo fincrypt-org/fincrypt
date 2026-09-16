@@ -100,9 +100,11 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek,
       wrappedDekRecovery: null,
     })
-    if (typeof indexedDB !== 'undefined') {
-      void import('../domain/store').then((m) => m.beginSync?.())
-    }
+    void import('../domain/store')
+      .then((m) => m.beginSync?.())
+      .catch(() => {
+        // no IndexedDB (test env) or store load failure — sync stays off
+      })
   },
 
   async unlockWithRecovery({ mnemonic, userId, wrappedDekRecovery }) {
@@ -117,9 +119,11 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek: null,
       wrappedDekRecovery,
     })
-    if (typeof indexedDB !== 'undefined') {
-      void import('../domain/store').then((m) => m.beginSync?.())
-    }
+    void import('../domain/store')
+      .then((m) => m.beginSync?.())
+      .catch(() => {
+        // no IndexedDB (test env) or store load failure — sync stays off
+      })
   },
 
   async getSubkey(type) {
@@ -149,9 +153,11 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek: null,
       wrappedDekRecovery: null,
     })
-    if (typeof indexedDB !== 'undefined') {
-      void import('../domain/store').then((m) => m.endSync?.())
-    }
+    void import('../domain/store')
+      .then((m) => m.endSync?.())
+      .catch(() => {
+        // no IndexedDB (test env) — nothing to tear down
+      })
   },
 }))
 
