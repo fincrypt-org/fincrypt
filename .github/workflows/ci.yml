@@ -207,6 +207,8 @@ jobs:
       # tests; compose-smoke runs its own job with the prod default)
       APP_ENV: dev
       APP_DEV_ORIGIN: http://localhost:5173
+      # the 6-test suite exceeds the 10/min/IP default from one runner IP
+      APP_RATE_AUTH_PER_MIN: "100"
     steps:
       - uses: actions/checkout@v7
       - name: boot server (applies 001)
