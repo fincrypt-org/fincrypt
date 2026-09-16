@@ -202,6 +202,11 @@ jobs:
     env:
       PGPASSWORD: fincrypt
       CANARY_MARKER: no-plaintext-canary-marker-6f3a
+      # dev topology for the whole job: the app is created with the Vite
+      # proxy origin allowlisted (prod branch still covered by session
+      # tests; compose-smoke runs its own job with the prod default)
+      APP_ENV: dev
+      APP_DEV_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@v7
       - name: boot server (applies 001)
@@ -238,17 +243,10 @@ jobs:
           fi
           echo "no-plaintext canary green"
       - name: run real e2e against the compose stack
-        # ENV=dev + DEV_ORIGIN allowlists the Vite proxy origin (same
-        # topology as local dev); the prod same-origin branch stays
-        # untouched and is covered by session_test.go's origin matrix.
-        env:
-          APP_ENV: dev
-          APP_DEV_ORIGIN: http://localhost:5173
         run: |
-          # recreate the app container so it picks up APP_ENV/APP_DEV_ORIGIN
-          # (compose reuses the container booted earlier without them)
-          cd "$GITHUB_WORKSPACE"
-          docker compose -f docker-compose.yml up -d --force-recreate app
+          # the app was booted with APP_ENV=dev at job level, so the Vite
+          # proxy origin is already allowlisted
+          curl -s -o /dev/null -w 'readyz=%{http_code}\n' http://localhost:8080/readyz
           cd web
           npm ci
           npx playwright install --with-deps chromium
