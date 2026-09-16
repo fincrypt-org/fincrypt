@@ -78,10 +78,12 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	for i, raw := range body.Pushes {
 		e, err := strictEnvelope(raw)
 		if err != nil {
+			s.logger.Warn("sync batch rejected", slog.Int("index", i), slog.String("why", err.Error()))
 			s.rejectBatch(w, i, err)
 			return
 		}
 		if err := validateEnvelope(userID, e); err != nil {
+			s.logger.Warn("sync batch rejected", slog.Int("index", i), slog.String("why", err.Error()))
 			s.rejectBatch(w, i, err)
 			return
 		}

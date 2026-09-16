@@ -21,13 +21,14 @@ export default function Login() {
       try {
         await useSessionKeys.getState().unlockWithPassphrase({
           pass: password,
-          userId: material.userId,
+          userId: material.wrapUserId,
+          recordUserId: material.userId,
           kdfSalt: material.kdfSalt,
           kdfParamsJson: material.kdfParamsJson,
           wrappedDek: material.wrappedDek,
         })
         useAuth.getState().markUnlocked()
-        navigate('/app')
+        navigate('/accounts')  // '/app' route doesn't exist yet in P2
       } catch {
         // WrapError: wrong passphrase for an existing account — the
         // message is user-facing (no stack, no key material)

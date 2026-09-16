@@ -50,16 +50,17 @@ export default function Register() {
       const material = await login({ email, password })
       await useSessionKeys.getState().unlockWithPassphrase({
         pass: password,
-        userId: material.userId,
+        userId: material.wrapUserId,
+        recordUserId: material.userId,
         kdfSalt: material.kdfSalt,
         kdfParamsJson: material.kdfParamsJson,
         wrappedDek: material.wrappedDek,
       })
       useAuth.getState().markUnlocked()
-    } catch {
-      // unlock failed (shouldn't happen with fresh credentials) — land locked
+    } catch (e) {
+      console.error('UNLOCK FAILED:', e)
     }
-    navigate('/app')
+    navigate('/accounts')  // '/app' route doesn't exist yet in P2
   }
 
   return (

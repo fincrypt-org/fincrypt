@@ -49,6 +49,10 @@ export interface RegisterOutcome {
 export interface LoginUnlockMaterial {
   userId: string
   email: string
+  debugSalt: string
+  debugParams: unknown
+  /** the OPAQUE user identifier the wrap AAD is bound to (canonical email) */
+  wrapUserId: string
   kdfSalt: Uint8Array
   kdfParamsJson: string
   wrappedDek: Uint8Array
@@ -100,11 +104,12 @@ export const useAuth = create<AuthState>((set) => ({
           }),
         },
       )
-      // 3. client finishes with the server response (server sends std b64;
-      // the server door accepts either alphabet, so pass it through)
+      // 3. client finishes with the server response. serenity's WASM only
+      // decodes base64url-no-pad; the server speaks padded std — convert
+      // at the boundary (exactly once, both directions, per §P2-0).
       const finished = opaque.client.finishRegistration({
         clientRegistrationState: started.clientRegistrationState,
-        registrationResponse: startRes.registrationResponse,
+        registrationResponse: stdToUrl(startRes.registrationResponse),
         password,
       })
       // 4. passphrase KEK → DEK → wrap (worker when available)
@@ -132,7 +137,7 @@ export const useAuth = create<AuthState>((set) => ({
           wrappedDek: toB64S(wrappedDek),
           wrappedDekRecovery: toB64S(wrappedRecovery),
           kdfSalt: startRes.kdfSalt,
-          kdfParams: JSON.stringify(params),
+          kdfParams: params,
         }),
       })
       const confirmIndices = pickConfirmIndices()
@@ -164,12 +169,19 @@ export const useAuth = create<AuthState>((set) => ({
           startLoginRequest: started.startLoginRequest,
         }),
       })
-      // 3. client verifies the server MAC
-      const finished = opaque.client.finishLogin({
-        clientLoginState: started.clientLoginState,
-        loginResponse: startRes.serverMsg,
-        password,
-      })
+      // 3. client verifies the server MAC. serenity throws on protocol
+      // failures (fake record for unknown users) AND returns undefined on
+      // client-detected MAC failures — both are 'invalid credentials' (D8).
+      let finished: { finishLoginRequest: string } | undefined | null
+      try {
+        finished = opaque.client.finishLogin({
+          clientLoginState: started.clientLoginState,
+          loginResponse: stdToUrl(startRes.serverMsg),
+          password,
+        })
+      } catch {
+        finished = undefined
+      }
       if (finished == null) {
         const err = new Error('invalid credentials')
         set({
@@ -189,10 +201,16 @@ export const useAuth = create<AuthState>((set) => ({
       return {
         userId: finishRes.userId,
         email: me.email,
+        wrapUserId: email,
         kdfSalt: fromB64(finishRes.kdfSalt),
-        kdfParamsJson: finishRes.kdfParams,
+        kdfParamsJson:
+          typeof finishRes.kdfParams === 'string'
+            ? finishRes.kdfParams
+            : JSON.stringify(finishRes.kdfParams),
         wrappedDek: fromB64(finishRes.wrappedDek),
         wrappedDekRecovery: fromB64(finishRes.wrappedDekRecovery),
+        debugSalt: finishRes.kdfSalt,
+        debugParams: finishRes.kdfParams,
       }
     } catch (e) {
       set({ busy: false, error: authErrorMessage(e) })
@@ -227,6 +245,16 @@ function toB64S(bytes: Uint8Array): string {
   let s = ''
   for (const b of bytes) s += String.fromCharCode(b)
   return btoa(s)
+}
+
+/** stdToUrl converts padded std base64 to serenity's url-no-pad alphabet. */
+function stdToUrl(std: string): string {
+  // already url-safe (mock server emits serenity's alphabet directly)
+  if (std.includes('-') || std.includes('_')) return std
+  const bin = atob(std)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
 function authErrorMessage(e: unknown): string {

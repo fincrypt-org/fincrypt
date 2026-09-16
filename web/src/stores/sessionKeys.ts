@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand'
 import { argon2idDerive, parseKdfParams, serializeKdfParams, type KdfParams } from '../crypto/kdf'
+import { deriveKekOffThread } from '../crypto/kdfWorkerClient'
 import { generateDek, deriveSubkey, unwrapDek, type RawKey } from '../crypto/keyHierarchy'
 import { deriveRecoveryKek, recoverDek } from '../crypto/recovery'
 import { importAesKey } from '../crypto/aead'
@@ -30,6 +31,8 @@ export interface RecoveryUnlockMaterial {
 interface SessionKeysState {
   locked: boolean
   userId: string | null
+  /** server-assigned UUID for record-data AADs (differs from the wrap id) */
+  recordUserId: string | null
   rawDek: RawKey | null
   subkeys: Map<RecordTypeLike, CryptoKey>
   /** kdf params as stored (echoed on lock for re-derive flows) */
@@ -44,7 +47,10 @@ type RecordTypeLike = 'transactions' | 'attachments' | 'chat' | 'accounts' | 'va
 interface SessionKeysActions {
   unlockWithPassphrase(args: {
     pass: string
+    /** OPAQUE/wrap identity (canonical email) — binds the wrap AAD */
     userId: string
+    /** server-assigned user UUID — binds the RECORD data AAD */
+    recordUserId?: string
     kdfSalt: Uint8Array
     kdfParamsJson: string
     wrappedDek: Uint8Array
@@ -63,6 +69,7 @@ type SessionKeysStore = SessionKeysState & SessionKeysActions
 export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
   locked: true,
   userId: null,
+  recordUserId: null,
   rawDek: null,
   subkeys: new Map(),
   kdfParamsJson: null,
@@ -70,15 +77,22 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
   wrappedDek: null,
   wrappedDekRecovery: null,
 
-  async unlockWithPassphrase({ pass, userId, kdfSalt, kdfParamsJson, wrappedDek }) {
+  async unlockWithPassphrase(args: Parameters<SessionKeysActions['unlockWithPassphrase']>[0]) {
+    const { pass, userId, kdfSalt, kdfParamsJson, wrappedDek } = args
     const params = parseKdfParams(kdfParamsJson)
-    const kekBytes = await argon2idDerive(pass, kdfSalt, params)
-    const kek = await importAesKey(kekBytes)
+    // KSF off the main thread when a Worker is available — a 64 MiB
+    // Argon2id on the main thread freezes all rendering during unlock.
+    let kek: CryptoKey
+    try {
+      kek = (await deriveKekOffThread(pass, kdfSalt, params)).kek
+    } catch {
+      kek = await importAesKey(await argon2idDerive(pass, kdfSalt, params))
+    }
     const dek = await unwrapDek(wrappedDek, kek, userId)
-    zeroize(kekBytes)
     set({
       locked: false,
       userId,
+      recordUserId: args.recordUserId ?? userId,
       rawDek: dek,
       subkeys: new Map(),
       kdfParamsJson,
@@ -86,6 +100,9 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek,
       wrappedDekRecovery: null,
     })
+    if (typeof indexedDB !== 'undefined') {
+      void import('../domain/store').then((m) => m.beginSync?.())
+    }
   },
 
   async unlockWithRecovery({ mnemonic, userId, wrappedDekRecovery }) {
@@ -100,6 +117,9 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek: null,
       wrappedDekRecovery,
     })
+    if (typeof indexedDB !== 'undefined') {
+      void import('../domain/store').then((m) => m.beginSync?.())
+    }
   },
 
   async getSubkey(type) {
@@ -129,6 +149,9 @@ export const useSessionKeys = create<SessionKeysStore>((set, get) => ({
       wrappedDek: null,
       wrappedDekRecovery: null,
     })
+    if (typeof indexedDB !== 'undefined') {
+      void import('../domain/store').then((m) => m.endSync?.())
+    }
   },
 }))
 

@@ -22,6 +22,7 @@ export default function TransactionsPage() {
   const [accounts, setAccounts] = useState<Array<{ recordId: string; data: AccountData }>>([])
   const [editing, setEditing] = useState<TxnRow | null>(null)
   const [creating, setCreating] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   async function reload() {
@@ -55,12 +56,17 @@ export default function TransactionsPage() {
     accounts.find((a) => a.recordId === id)?.data.name ?? '(unknown account)'
 
   async function onSave(data: TransactionData, recordId?: string) {
-    await saveRecord({
-      type: 'transactions',
-      recordId: recordId ?? crypto.randomUUID(),
-      data,
-      ts: recordId != null ? new Date(Date.now() + 1).toISOString() : undefined,
-    })
+    try {
+      await saveRecord({
+        type: 'transactions',
+        recordId: recordId ?? crypto.randomUUID(),
+        data,
+        ts: recordId != null ? new Date(Date.now() + 1).toISOString() : undefined,
+      })
+    } catch (e) {
+      setLocalError(String(e))
+      return
+    }
     setEditing(null)
     setCreating(false)
     await reload()
@@ -84,6 +90,7 @@ export default function TransactionsPage() {
   return (
     <main style={{ padding: '2rem', maxWidth: 1200 }}>
       <h1>Transactions</h1>
+      {localError != null && <p role="alert" style={{ color: "#c0392b" }}>{localError}</p>}
       <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem' }}>
         <button
           onClick={() => setCreating(true)}
