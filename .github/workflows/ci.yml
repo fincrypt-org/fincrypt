@@ -245,6 +245,10 @@ jobs:
           APP_ENV: dev
           APP_DEV_ORIGIN: http://localhost:5173
         run: |
+          # recreate the app container so it picks up APP_ENV/APP_DEV_ORIGIN
+          # (compose reuses the container booted earlier without them)
+          cd "$GITHUB_WORKSPACE"
+          docker compose -f docker-compose.yml up -d --force-recreate app
           cd web
           npm ci
           npx playwright install --with-deps chromium
