@@ -25,10 +25,10 @@ export async function saveRecord<T extends SyncableType>(args: {
   ts?: string
 }): Promise<void> {
   const store = useSessionKeys.getState()
-  if (store.locked || store.rawDek == null || store.userId == null) {
+  if (store.locked || store.rawDek == null || store.recordUserId == null) {
     throw new Error('vault is locked')
   }
-  const userId = store.userId
+  const userId = store.recordUserId
   const subkey = await deriveSubkey(store.rawDek, args.type)
   const recordId = args.recordId
   const aad = buildAadString(userId, args.type, recordId)
@@ -84,8 +84,16 @@ export async function loadWorking(
     throw new Error('vault is locked')
   }
   const subkey = await deriveSubkey(store.rawDek, type)
+  // pull the latest server delta first so the read is cache-coherent;
+  // failures (offline) just fall through to the local cache
+  try {
+    await flush(store.userId)
+  } catch {
+    // offline / server unreachable — keep the cached view
+  }
   const rows = await cache.envelopes.where('type').equals(type).toArray()
   const out: Array<{ recordId: string; data: unknown; ts: string }> = []
+  const covered = new Set<string>()
   for (const row of rows) {
     if (row.deleted === 1) continue
     const packed = fromB64(row.blob)
@@ -95,7 +103,15 @@ export async function loadWorking(
     const plaintext = await decryptWithSubkey(subkey, nonce, ciphertext, row.aad)
     const data = JSON.parse(new TextDecoder().decode(plaintext)) as unknown
     await cache.working.put({ key: row.key, recordId: row.recordId, type, data, ts: row.ts })
+    covered.add(row.key)
     out.push({ recordId: row.recordId, data, ts: row.ts })
+  }
+  // freshly-saved rows live in the working set before the server
+  // round-trip lands them in envelopes — surface them too
+  const pending = await cache.working.where('type').equals(type).toArray()
+  for (const w of pending) {
+    if (covered.has(w.key)) continue
+    out.push({ recordId: w.recordId, data: w.data, ts: w.ts })
   }
   return out
 }
@@ -162,10 +178,13 @@ export async function syncNow(): Promise<FlushResult> {
   return flush(store.userId)
 }
 
-/** beginSync starts the background loop (on unlock). */
+/** beginSync flushes immediately, then starts the background loop (on unlock). */
 export function beginSync(): void {
   const store = useSessionKeys.getState()
-  if (store.userId != null) startSync(store.userId)
+  if (store.userId != null) {
+    void flush(store.userId)
+    startSync(store.userId)
+  }
 }
 
 /** endSync stops the loop and clears the decrypted working set (on lock). */

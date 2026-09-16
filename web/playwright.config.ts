@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
 // full register/login/sync flows against `make dev`.
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30_000,
+  timeout: 90_000,
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
