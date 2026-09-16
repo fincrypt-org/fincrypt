@@ -3,3 +3,8 @@ node_modules/
 playwright-report/
 test-results/
 coverage/
+apiprobe.mjs
+crosscheck.mjs
+crosscheck2.mjs
+e2e/freeze.spec.ts
+e2e/probe.spec.ts

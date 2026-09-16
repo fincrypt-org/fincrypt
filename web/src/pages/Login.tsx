@@ -28,7 +28,7 @@ export default function Login() {
           wrappedDek: material.wrappedDek,
         })
         useAuth.getState().markUnlocked()
-        navigate('/accounts')  // '/app' route doesn't exist yet in P2
+        navigate('/accounts') // '/app' route doesn't exist yet in P2
       } catch {
         // WrapError: wrong passphrase for an existing account — the
         // message is user-facing (no stack, no key material)

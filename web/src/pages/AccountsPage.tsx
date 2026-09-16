@@ -79,7 +79,11 @@ export default function AccountsPage() {
   return (
     <main style={{ padding: '2rem', maxWidth: 1200 }}>
       <h1>Accounts</h1>
-      {localError != null && <p role="alert" style={{ color: "#c0392b" }}>{localError}</p>}
+      {localError != null && (
+        <p role="alert" style={{ color: '#c0392b' }}>
+          {localError}
+        </p>
+      )}
       <form
         onSubmit={onCreate}
         style={{ display: 'flex', gap: '0.5rem', maxWidth: 640, margin: '1rem 0 2rem' }}

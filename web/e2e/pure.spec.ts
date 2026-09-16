@@ -41,8 +41,10 @@ test('pure in-browser OPAQUE roundtrip (no store)', async ({ page }) => {
     const s2 = await post('/api/auth/register/finish', {
       email,
       registrationRecord: r3.registrationRecord,
-      wrappedDek: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBw',
-      wrappedDekRecovery: 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBw',
+      wrappedDek:
+        'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBw',
+      wrappedDekRecovery:
+        'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBw',
       kdfSalt: s1.body.kdfSalt,
       kdfParams: { alg: 'argon2id', version: 19, m: 65536, t: 3, p: 4 },
     })

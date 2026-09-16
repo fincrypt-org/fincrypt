@@ -60,7 +60,7 @@ export default function Register() {
     } catch (e) {
       console.error('UNLOCK FAILED:', e)
     }
-    navigate('/accounts')  // '/app' route doesn't exist yet in P2
+    navigate('/accounts') // '/app' route doesn't exist yet in P2
   }
 
   return (
