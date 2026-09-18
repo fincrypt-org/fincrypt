@@ -183,7 +183,7 @@ jobs:
   no-plaintext:
     # Canary: proves the scan machinery itself on day 1 by seeding a
     # synthetic plaintext marker, dumping the DB, and grepping. From P2
-    # onward this runs after real e2e with tests/fixtures/plaintext-strings.txt.
+    # onward this runs after real e2e with e2e/fixtures/plaintext-strings.txt.
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -202,6 +202,13 @@ jobs:
     env:
       PGPASSWORD: fincrypt
       CANARY_MARKER: no-plaintext-canary-marker-6f3a
+      # dev topology for the whole job: the app is created with the Vite
+      # proxy origin allowlisted (prod branch still covered by session
+      # tests; compose-smoke runs its own job with the prod default)
+      APP_ENV: dev
+      APP_DEV_ORIGIN: http://localhost:5173
+      # the 6-test suite exceeds the 10/min/IP default from one runner IP
+      APP_RATE_AUTH_PER_MIN: "100"
     steps:
       - uses: actions/checkout@v7
       - name: boot server (applies 001)
@@ -237,6 +244,35 @@ jobs:
             exit 1
           fi
           echo "no-plaintext canary green"
+      - name: run real e2e against the compose stack
+        run: |
+          # the app was booted with APP_ENV=dev at job level, so the Vite
+          # proxy origin is already allowlisted
+          curl -s -o /dev/null -w 'readyz=%{http_code}\n' http://localhost:8080/readyz
+          cd web
+          npm ci
+          npx playwright install --with-deps chromium
+          # Playwright's webServer boots Vite (proxying /api -> :8080, the
+          # compose app under test)
+          npx playwright test e2e/auth.spec.ts e2e/isolation.spec.ts e2e/sync.spec.ts \
+            --project=chromium --workers=2 --reporter=line
+      - name: dump app logs (diagnose e2e failures)
+        if: failure()
+        run: docker compose -f docker-compose.yml logs app | tail -60
+      - name: dump and grep the post-e2e DB for fixture plaintext
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.yml exec -T postgres pg_dump -U fincrypt fincrypt > /tmp/dump2.sql
+          hits=0
+          while IFS= read -r needle; do
+            [ -z "$needle" ] && continue
+            if grep -qF "$needle" /tmp/dump2.sql; then
+              echo "::error::plaintext fixture found in the post-e2e DB: $needle"
+              hits=$((hits+1))
+            fi
+          done < web/e2e/fixtures/plaintext-strings.txt
+          if [ "$hits" -ne 0 ]; then exit 1; fi
+          echo "post-e2e canary green: zero fixture hits in app tables"
       - name: teardown
         if: always()
         run: docker compose -f docker-compose.yml down -v

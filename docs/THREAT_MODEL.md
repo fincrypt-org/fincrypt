@@ -102,6 +102,17 @@ You are the operator. The consequences are yours to weigh:
 | D3 | gap-fill | Wrap AADs bind userId AND wrap-kind: `v1|<userId>|wrapped-dek` / `v1|<userId>|wrapped-dek-recovery` (prevents dek-wrap ↔ recovery-wrap replay; tested) |
 | D4 | gap-fill | Recovery KEK = BIP39 seed → HKDF-SHA256 (salt=`fincrypt/v1/hkdf`, info=`recovery`) → AES-256-GCM; BIP39 passphrase pinned empty in v1 |
 
+## §P2-0 gap-fills and deltas (D5–D10)
+
+| # | Kind | Content |
+|---|---|---|
+| D5 | decision | Budget definitions + categories live inside the vault envelope (no budgets table in 001; a generic-records migration would be scope creep). Revisit only if the blob approaches 256 KB |
+| D6 | decision | Stateless 7-day session JWT; logout clears the cookie only — revocation is a P6 concern. LWW clock = client envelope `ts` + 5-minute future-poisoning guard + `max(record_id)` tie-break, identical rules client- and server-side |
+| D7 | gap-fill | Server-side `kdf_params` allowed set (argon2id, m=65536, t=3, p=4, version 0x13) — downgrade defense; client proposals outside the set are rejected |
+| D8 | gap-fill | Anti-enumeration posture: uniform register/login responses for known and unknown emails + hard rate limits; full fake-OPRF indistinguishability is a documented v1 residual |
+| D9 | delta | CSRF posture: `SameSite=Lax` cookie + Origin allowlist check on every state-changing request (absent Origin ⇒ reject) + JSON-only bodies; no CSRF token in v1 |
+| D10 | gap-fill | Client cache: Dexie stores ciphertext envelopes **and** the decrypted working set + MiniSearch index (sanctioned by the local-cache allowance); working set + index are cleared on `lock()`/logout, ciphertext tables may persist; XSS residual documented (CSP = P6) |
+
 ## Key-design decision: OPAQUE export_key is never a KEK
 
 The OPAQUE `export_key` is **never used as a KEK and never wraps the
@@ -117,7 +128,7 @@ documented — see `OPAQUE-NOTES.md`.)
 
 | Claim | Mechanized test | Status |
 |---|---|---|
-| Server storage is ciphertext-only | CI `no-plaintext`: after e2e, `pg_dump` is grepped for fixture plaintext; canary proves the scan machinery from day 1 | CI gate active (canary) |
+| Server storage is ciphertext-only | CI `no-plaintext`: canary proves the scan machinery, then the real e2e suite runs against the compose stack and the post-e2e `pg_dump` is grepped for `web/e2e/fixtures/plaintext-strings.txt` — zero hits | CI gate active (canary + post-e2e grep) |
 | No secrets in the repository | gitleaks on every push, org-level secret scanning + push protection | CI gate active |
 | Zero telemetry | CI `no-telemetry`: fails on any analytics dep or dist artifact | CI gate active |
 | Request logs never contain bodies or cookies | Go test asserts log output lacks request body and cookie material | unit test (P0) |

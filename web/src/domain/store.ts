@@ -4,6 +4,7 @@
  * Everything here uses the frozen crypto API (P1) — no local shims.
  */
 import { cache, clearWorking } from '../cache/db'
+import { buildSearchIndex, searchIndex, type SearchHit } from '../cache/search'
 import { enqueue, flush, startSync, type FlushResult } from '../sync/engine'
 import { useSessionKeys } from '../stores/sessionKeys'
 import { deriveSubkey, buildAadString } from '../crypto/index'
@@ -179,17 +180,31 @@ export async function syncNow(): Promise<FlushResult> {
 }
 
 /** beginSync flushes immediately, then starts the background loop (on unlock). */
+/** search over the decrypted working set (null index ⇒ no hits). */
+let searchIndexRef: Awaited<ReturnType<typeof buildSearchIndex>> | null = null
+
 export function beginSync(): void {
   const store = useSessionKeys.getState()
   if (store.userId != null) {
     void flush(store.userId)
     startSync(store.userId)
+    // rebuild the search index from the (fresh) working set
+    void buildSearchIndex().then((idx) => {
+      searchIndexRef = idx
+    })
   }
 }
 
-/** endSync stops the loop and clears the decrypted working set (on lock). */
+/** endSync stops the loop and clears the decrypted working set + search index (on lock). */
 export async function endSync(): Promise<void> {
+  searchIndexRef = null // in-memory index dies with the lock (D10/I14)
   await clearWorking()
+}
+
+/** vaultSearch queries the current index; returns [] when locked. */
+export function vaultSearch(query: string, limit = 50): SearchHit[] {
+  if (useSessionKeys.getState().locked) return []
+  return searchIndex(searchIndexRef, query, limit)
 }
 
 // re-exports so pages don't import the engine directly

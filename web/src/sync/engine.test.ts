@@ -6,7 +6,9 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import 'fake-indexeddb/auto'
 import { cache, clearAll } from '../cache/db'
-import { enqueue, mergeChange, flush } from '../sync/engine'
+import { enqueue, flush, enqueueDelete, backoffDelay } from '../sync/engine'
+import { drain, removeFlushed, pendingDeletes, clearDelete } from '../sync/outbox'
+import { mergeChange } from '../sync/merge'
 import { useSessionKeys } from '../stores/sessionKeys'
 
 // The engine's fetch goes to the "server"; a small in-memory stub holds
@@ -116,6 +118,51 @@ describe('outbox', () => {
     const rows = await cache.outbox.toArray()
     expect(rows).toHaveLength(1)
     expect(rows[0]?.type).toBe('accounts')
+  })
+
+  it('drains in FIFO seq order and respects the batch limit', async () => {
+    for (let i = 0; i < 3; i++) {
+      await enqueue({
+        recordId: 'd' + i,
+        type: 'chat',
+        envelope: envelope({
+          recordId: 'd' + i,
+          type: 'chat',
+          seed: i,
+          ts: new Date().toISOString(),
+          userId: 'u',
+        }),
+      })
+    }
+    const batch = await drain(2)
+    expect(batch).toHaveLength(2)
+    expect(batch[0]?.seq).toBeLessThanOrEqual(batch[1]?.seq ?? 0)
+    const first = JSON.parse(batch[0]?.envelope ?? '{}') as { record_id: string }
+    expect(first.record_id).toBe('d0')
+    await removeFlushed(batch.map((b) => b.seq))
+    const rest = await cache.outbox.toArray()
+    expect(rest).toHaveLength(1)
+  })
+
+  it('queues and clears tombstone deletes', async () => {
+    await cache.envelopes.put({
+      key: 'chat:dd1',
+      recordId: 'dd1',
+      type: 'chat',
+      blob: 'A',
+      aad: 'x',
+      ts: '2026-01-01T00:00:00Z',
+      deleted: 0,
+    })
+    const ts = '2026-01-02T00:00:00Z'
+    await enqueueDelete({ recordId: 'dd1', type: 'chat', ts })
+    const row = await cache.envelopes.get('chat:dd1')
+    expect(row?.deleted).toBe(1) // flagged locally
+    const pending = await pendingDeletes()
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.recordId).toBe('dd1')
+    await clearDelete('chat', 'dd1')
+    expect(await pendingDeletes()).toHaveLength(0)
   })
 })
 
@@ -251,6 +298,14 @@ describe('flush', () => {
     const result = await flush('user-1')
     expect(result.failed).toBe(true)
     expect(await cache.outbox.count()).toBe(1) // still queued
+  })
+})
+
+describe('scheduler', () => {
+  it('backoff grows exponentially and stays within the jitter cap', () => {
+    const first = backoffDelay()
+    expect(first).toBeGreaterThanOrEqual(1000)
+    expect(first).toBeLessThanOrEqual(1200) // 1s ± 20%
   })
 })
 

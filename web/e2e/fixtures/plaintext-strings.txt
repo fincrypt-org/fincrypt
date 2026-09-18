@@ -1,0 +1,10 @@
+no-plaintext-fixture-marker-9e2c41
+Fincrypt Plaintext Strings Fixture
+These strings must NEVER appear in any Fincrypt database table that
+holds user data. The no-plaintext CI canary seeds them through the
+running app, dumps the DB, and asserts zero hits. A hit means
+plaintext financial data reached the server — the core product
+guarantee is broken.
+fincrypt-plaintext-account-name-XYZ
+fincrypt-plaintext-txn-description-XYZ
+fincrypt-plaintext-budget-category-XYZ
