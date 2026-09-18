@@ -22,7 +22,7 @@ export interface LoginStartResponse {
 export interface LoginFinishResponse {
   userId: string
   kdfSalt: string
-  kdfParams: string
+  kdfParams: unknown // Go marshals the jsonb column as a nested object
   wrappedDek: string
   wrappedDekRecovery: string
 }
@@ -31,7 +31,7 @@ export interface MeResponse {
   userId: string
   email: string
   kdfSalt: string
-  kdfParams: string
+  kdfParams: unknown // Go marshals the jsonb column as a nested object
 }
 
 /**

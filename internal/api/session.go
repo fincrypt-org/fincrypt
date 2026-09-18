@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,8 +188,14 @@ type rateTable struct {
 }
 
 func newRateTable() *rateTable {
+	authPerMin := 10
+	if v := os.Getenv("RATE_AUTH_PER_MIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			authPerMin = n
+		}
+	}
 	return &rateTable{
-		authPerIP:    newIPBuckets(10, time.Minute),
+		authPerIP:    newIPBuckets(authPerMin, time.Minute),
 		syncPerUser:  newBuckets(60, time.Minute),
 		attachPerUser: newBuckets(30, time.Minute),
 	}

@@ -20,6 +20,7 @@ export default function AccountsPage() {
   const [currency, setCurrency] = useState('USD')
   const [opening, setOpening] = useState('0.00')
   const [busy, setBusy] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
 
   async function reload() {
     const loaded = await loadWorking('accounts')
@@ -50,6 +51,8 @@ export default function AccountsPage() {
       setName('')
       setOpening('0.00')
       await reload()
+    } catch (e) {
+      setLocalError(String(e))
     } finally {
       setBusy(false)
     }
@@ -76,6 +79,11 @@ export default function AccountsPage() {
   return (
     <main style={{ padding: '2rem', maxWidth: 1200 }}>
       <h1>Accounts</h1>
+      {localError != null && (
+        <p role="alert" style={{ color: '#c0392b' }}>
+          {localError}
+        </p>
+      )}
       <form
         onSubmit={onCreate}
         style={{ display: 'flex', gap: '0.5rem', maxWidth: 640, margin: '1rem 0 2rem' }}

@@ -146,7 +146,7 @@ func registerThroughHandlers(t *testing.T, s *Server, d *driver, email, password
 		"wrappedDek":         base64.StdEncoding.EncodeToString(make([]byte, 48)),
 		"wrappedDekRecovery": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")),
 		"kdfSalt":            kdfSalt,
-		"kdfParams":          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`),
+		"kdfParams":          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":19}`),
 	})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("register/finish status = %d: %v", rec.Code, resp)
@@ -267,7 +267,7 @@ func TestHandlersDuplicateEmail409(t *testing.T) {
 		"wrappedDek":         base64.StdEncoding.EncodeToString(make([]byte, 48)),
 		"wrappedDekRecovery": base64.StdEncoding.EncodeToString(make([]byte, 48)),
 		"kdfSalt":            resp["kdfSalt"].(string),
-		"kdfParams":          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`),
+		"kdfParams":          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":19}`),
 	})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("duplicate register/finish = %d, want 409: %v", rec.Code, resp)

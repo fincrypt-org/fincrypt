@@ -16,7 +16,7 @@ import (
 // ─── D7 kdf_params validation ────────────────────────────────────────
 
 func TestAllowedKDFParams(t *testing.T) {
-	ok := json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`)
+	ok := json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":19}`)
 	if err := allowedKDFParams(ok); err != nil {
 		t.Fatalf("profile params rejected: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestAllowedKDFParams(t *testing.T) {
 		json.RawMessage(`{"alg":"argon2id","m":32768,"t":3,"p":4,"version":1}`), // downgraded m
 		json.RawMessage(`{"alg":"argon2id","m":65536,"t":1,"p":4,"version":1}`), // downgraded t
 		json.RawMessage(`{"alg":"argon2i","m":65536,"t":3,"p":4,"version":1}`),  // wrong alg
-		json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":2}`), // wrong version
+		json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`), // wrong version
 		json.RawMessage(`{"alg":"argon2id"}`),                                   // missing fields
 		json.RawMessage(`42`),
 	}
@@ -161,7 +161,7 @@ func TestServiceRegisterLoginLifecycle(t *testing.T) {
 		WrappedDek:         wrapped48, // 32B dummy, shape-checked
 		WrappedDekRecovery: wrapped48b,
 		KdfSalt:            salt,
-		KdfParams:          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`),
+		KdfParams:          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":19}`),
 	})
 	if err != nil {
 		t.Fatalf("RegisterFinish: %v", err)
@@ -177,7 +177,7 @@ func TestServiceRegisterLoginLifecycle(t *testing.T) {
 		WrappedDek:         wrapped48,
 		WrappedDekRecovery: wrapped48b,
 		KdfSalt:            salt,
-		KdfParams:          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":1}`),
+		KdfParams:          json.RawMessage(`{"alg":"argon2id","m":65536,"t":3,"p":4,"version":19}`),
 	})
 	if err == nil || !strings.Contains(err.Error(), "already registered") {
 		t.Fatalf("want ErrEmailTaken, got %v", err)

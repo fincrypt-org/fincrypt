@@ -25,8 +25,18 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     let code = 'unknown'
     let message = `request failed with status ${res.status}`
     try {
-      const body = (await res.json()) as { error?: string; code?: string }
-      if (body.error) message = body.error
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string }
+        code?: string
+      }
+      // §P2-0 envelope: {error: {code, message}}
+      if (typeof body.error === 'object' && body.error != null) {
+        code = body.error.code ?? code
+        message = body.error.message ?? message
+      } else if (typeof body.error === 'string') {
+        // P0 health shape {error: string}
+        message = body.error
+      }
       if (body.code) code = body.code
     } catch {
       // non-JSON error body — keep defaults
